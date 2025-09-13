@@ -19,6 +19,7 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
 
   const updateWaveform = () => {
     if (!analyserRef.current) {
+      console.log('Waveform update stopped - no analyser');
       return;
     }
     
@@ -26,6 +27,7 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
     const isActivelyRecording = mediaRecorderRef.current?.state === 'recording';
     
     if (!isActivelyRecording) {
+      console.log('Waveform update stopped - not actively recording, state:', mediaRecorderRef.current?.state);
       return;
     }
     
@@ -40,44 +42,36 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
     const rawAverage = rawSum / dataArray.length;
     
     if (rawAverage > 1) {
-return;    }
+      console.log('Raw audio data detected - average:', rawAverage, 'max:', Math.max(...dataArray));
+    }
     
-    // Process data into 40 bars - focus on voice frequency range
+    // Process data into 40 bars - spread across full frequency range
     const bars = 40;
-    // Human voice is mostly 85Hz-4kHz, which is roughly the first 20-25% of the frequency spectrum
-    // Let's map this range across all 40 bars for better visualization
-    const voiceRangeEnd = Math.floor(bufferLength * 0.3); // Use first 30% which covers voice range
+    const usableRange = Math.floor(bufferLength * 0.8); // Use 80% of frequency range
+    const samplesPerBar = Math.floor(usableRange / bars);
     const waveData: number[] = [];
     
-    // Calculate overall energy level
-    const totalEnergy = Array.from(dataArray.slice(0, voiceRangeEnd)).reduce((sum, val) => sum + val, 0) / voiceRangeEnd;
-    
     for (let i = 0; i < bars; i++) {
-      let maxValue = 0;
+      let sum = 0;
+      let count = 0;
+      const startIndex = i * samplesPerBar;
+      const endIndex = Math.min(startIndex + samplesPerBar, usableRange);
       
-      // Map each bar to a portion of the voice frequency range
-      const startIndex = Math.floor((i / bars) * voiceRangeEnd);
-      const endIndex = Math.floor(((i + 1) / bars) * voiceRangeEnd);
-      
-      // Use the maximum value in the range instead of average for better responsiveness
       for (let j = startIndex; j < endIndex; j++) {
-        if (j < dataArray.length) {
-          maxValue = Math.max(maxValue, dataArray[j]);
-        }
+        sum += dataArray[j];
+        count++;
       }
       
-      // Normalize and apply moderate scaling
-      let normalized = maxValue / 255;
-      
-      // Add some randomness based on overall energy to create more dynamic visualization
-      if (totalEnergy > 10) { // Only when there's actual audio
-        const randomFactor = 0.7 + (Math.random() * 0.6); // 0.7 to 1.3
-        normalized *= randomFactor;
+      if (count > 0) {
+        // Average and normalize (0-255 to 0-1)
+        const average = sum / count;
+        const normalized = average / 255;
+        // Reduce amplification and add logarithmic scaling for better visual balance
+        const scaled = Math.pow(normalized, 0.7) * 1.5; // Less aggressive amplification
+        waveData.push(Math.min(scaled, 1));
+      } else {
+        waveData.push(0);
       }
-      
-      // Use square root for more sensitive response to lower levels
-      const scaled = Math.sqrt(normalized) * 2;
-      waveData.push(Math.min(scaled, 1));
     }
     
     setWaveformData(waveData);
@@ -85,7 +79,8 @@ return;    }
     // Debug: log max value to console
     const maxValue = Math.max(...waveData);
     if (maxValue > 0.01) {
-        return;    }
+      console.log('Processed waveform data - max value:', maxValue);
+    }
     
     // Continue animation if still recording
     if (isActivelyRecording) {
@@ -125,7 +120,10 @@ return;    }
       analyserRef.current.minDecibels = -80; // Better dynamic range
       analyserRef.current.maxDecibels = -20;
       
-     
+      console.log('Audio context created, sample rate:', audioContextRef.current.sampleRate);
+      console.log('Audio context state:', audioContextRef.current.state);
+      console.log('Analyser frequency bin count:', analyserRef.current.frequencyBinCount);
+      
       source.connect(analyserRef.current);
       
       // Set up media recorder
@@ -156,9 +154,12 @@ return;    }
       
       // Start recording
       mediaRecorderRef.current.start(100); // Collect data every 100ms
+      console.log('MediaRecorder started, state:', mediaRecorderRef.current.state);
       setIsRecording(true);
+      console.log('Set isRecording to true');
       
       // Start waveform animation immediately
+      console.log('Starting waveform animation...');
       animationRef.current = requestAnimationFrame(updateWaveform);
       
     } catch (error) {
