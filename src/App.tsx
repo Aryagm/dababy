@@ -1,19 +1,18 @@
 import './App.css'
 import { useState } from 'react'
-import { ContinuousMonitor } from '@/components/ContinuousMonitor'
-import { WaveformRecorder } from '@/components/WaveformRecorder'
-import { AlertDashboard } from '@/components/AlertDashboard'
-import { FeatureDisplay } from '@/components/FeatureDisplay'
-import { CryAnalytics } from '@/components/CryAnalytics'
+import { RecordingSection } from '@/components/RecordingSection'
+import { ResultsSection } from '@/components/ResultsSection'
+import { AIChatbot } from '@/components/AIChatbot'
+import { ResultsExplanation } from '@/components/ResultsExplanation'
 import { Button } from '@/components/ui/button'
-import { BarChart3, Activity } from 'lucide-react'
+import { Mic, BarChart3, Bot } from 'lucide-react'
 import type { DetectionResult } from '@/lib/audioAnalysis'
 import type { CryInstance } from '@/lib/cryDetection'
 
 function App() {
   const [detectionResults, setDetectionResults] = useState<DetectionResult[]>([]);
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [currentMode, setCurrentMode] = useState<'continuous' | 'single' | 'analytics'>('single');
+  const [activeSection, setActiveSection] = useState<'recording' | 'results' | 'ai'>('recording');
 
   const handleDetectionResult = (result: DetectionResult) => {
     setDetectionResults(prev => [...prev, result].slice(-100)); // Keep last 100 results
@@ -29,7 +28,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="text-center mb-8 space-y-4">
           <h1 className="text-4xl font-bold tracking-tight">crai.</h1>
@@ -39,63 +38,71 @@ function App() {
           <p className="text-sm text-muted-foreground">
             Real-time detection and heuristic analysis for early health indicators
           </p>
-          
-          {/* Mode Selection */}
-          <div className="flex justify-center gap-2 pt-4">
+        </div>
+
+        {/* Section Navigation */}
+        <div className="flex justify-center mb-8">
+          <div className="flex bg-muted rounded-lg p-1">
             <Button
-              variant={currentMode === 'continuous' ? 'default' : 'outline'}
-              onClick={() => setCurrentMode('continuous')}
+              variant={activeSection === 'recording' ? 'default' : 'ghost'}
+              onClick={() => setActiveSection('recording')}
+              className="flex items-center gap-2"
             >
-              <Activity className="w-4 h-4 mr-2" />
-              Continuous Monitoring
+              <Mic className="w-4 h-4" />
+              Recording
             </Button>
             <Button
-              variant={currentMode === 'single' ? 'default' : 'outline'}
-              onClick={() => setCurrentMode('single')}
+              variant={activeSection === 'results' ? 'default' : 'ghost'}
+              onClick={() => setActiveSection('results')}
+              className="flex items-center gap-2"
             >
-              Cry Detection
+              <BarChart3 className="w-4 h-4" />
+              Results
             </Button>
             <Button
-              variant={currentMode === 'analytics' ? 'default' : 'outline'}
-              onClick={() => setCurrentMode('analytics')}
+              variant={activeSection === 'ai' ? 'default' : 'ghost'}
+              onClick={() => setActiveSection('ai')}
+              className="flex items-center gap-2"
             >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Analytics
+              <Bot className="w-4 h-4" />
+              AI Assistant
             </Button>
           </div>
         </div>
 
-        <div className="space-y-8">
-          {/* Recording/Monitoring Section */}
-          {currentMode === 'analytics' ? (
-            <CryAnalytics />
-          ) : (
-            <div className="flex justify-center">
-              {currentMode === 'continuous' ? (
-                <ContinuousMonitor 
-                  onDetectionResult={handleDetectionResult}
-                  isMonitoring={isMonitoring}
-                  onMonitoringChange={setIsMonitoring}
-                />
-              ) : (
-                <WaveformRecorder 
-                  onCryDetected={handleCryDetected}
-                />
-              )}
-            </div>
-          )}
+        {/* Results Explanation - Show at top when there are results, or when in results section */}
+        {(detectionResults.length > 0 || activeSection === 'results') && activeSection !== 'ai' && (
+          <div className="mb-8">
+            <ResultsExplanation 
+              latestResult={detectionResults.length > 0 ? detectionResults[detectionResults.length - 1] : null}
+              totalDetections={detectionResults.length}
+            />
+          </div>
+        )}
 
-          {/* Alert Dashboard - only show when not in analytics mode */}
-          {currentMode !== 'analytics' && (
-            <AlertDashboard 
-              detectionResults={detectionResults}
+        {/* Single Section Display */}
+        <div className="w-full">
+          {activeSection === 'recording' && (
+            <RecordingSection 
+              onDetectionResult={handleDetectionResult}
+              onCryDetected={handleCryDetected}
               isMonitoring={isMonitoring}
+              onMonitoringChange={setIsMonitoring}
             />
           )}
 
-          {/* Feature Analysis - only show when not in analytics mode */}
-          {currentMode !== 'analytics' && (
-            <FeatureDisplay features={latestFeatures} />
+          {activeSection === 'results' && (
+            <ResultsSection 
+              detectionResults={detectionResults}
+              isMonitoring={isMonitoring}
+              latestFeatures={latestFeatures}
+            />
+          )}
+
+          {activeSection === 'ai' && (
+            <AIChatbot 
+              detectionResults={detectionResults}
+            />
           )}
         </div>
       </div>

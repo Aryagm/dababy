@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { WaveformBar } from '@/components/ui/progress';
 import { Play, Pause, Activity } from 'lucide-react';
 import { AudioAnalyzer, type DetectionResult } from '@/lib/audioAnalysis';
+import { CryStorage, CryDiagnosisEngine } from '@/lib/cryDetection';
 
 interface ContinuousMonitorProps {
   onDetectionResult?: (result: DetectionResult) => void;
@@ -39,6 +40,24 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
       if (audioBuffer.duration >= 0.5) {
         const result = await audioAnalyzer.current.analyzeAudio(audioBuffer);
         onDetectionResult?.(result);
+        
+        // Store significant detection results to localStorage
+        if (result.riskLevel !== 'low' || result.alerts.length > 0) {
+          const diagnosis = CryDiagnosisEngine.generateDiagnosis(result);
+          
+          const cryInstance = {
+            id: `continuous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date(),
+            duration: audioBuffer.duration,
+            features: result.features,
+            alerts: result.alerts,
+            diagnosis,
+            riskLevel: result.riskLevel,
+            confidence: diagnosis.confidence
+          };
+          
+          CryStorage.saveCryWithAudio(cryInstance, audioBlob);
+        }
         
         // Update baseline for weak cry detection
         audioAnalyzer.current.updateBaseline(result.features.rms);

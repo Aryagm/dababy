@@ -100,7 +100,7 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
   };
 
   const updateWaveform = () => {
-    if (!analyserRef.current || phase === 'idle') {
+    if (!analyserRef.current) {
       return;
     }
     
@@ -156,7 +156,7 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
     
     setWaveformData(waveData);
     
-    // Continue animation if not idle or complete
+    // Continue animation if recording or processing
     if (phase === 'recording' || phase === 'cry-detected' || phase === 'analyzing') {
       animationRef.current = requestAnimationFrame(updateWaveform);
     }
