@@ -3,7 +3,7 @@ import type { Alert, DetectionResult } from '@/lib/audioAnalysis';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert as AlertComponent, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, Heart, Brain, Stethoscope, Ear, Volume2, Activity, AlertCircle, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Heart, Brain, Stethoscope, Ear, Volume2, Activity, AlertCircle } from 'lucide-react';
 
 interface AlertDashboardProps {
   detectionResults: DetectionResult[];
