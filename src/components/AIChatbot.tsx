@@ -158,30 +158,30 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
 
   return (
     <Card className={`w-full ${className}`}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="w-5 h-5" />
-          AI Assistant
-          <Badge variant="secondary" className="ml-auto">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-3">
+          <Bot className="w-6 h-6 text-primary" />
+          <span className="text-lg font-semibold">AI Assistant</span>
+          <Badge variant="secondary" className="ml-auto px-2 py-1">
             <Sparkles className="w-3 h-3 mr-1" />
             Beta
           </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="pt-0 space-y-6">
         {/* Chat Messages */}
-        <div className="h-80 overflow-y-auto space-y-3 p-3 border rounded-lg bg-muted/20">
+        <div className="h-80 overflow-y-auto space-y-4 p-4 border rounded-lg bg-muted/10">
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex items-start gap-2 ${
+              className={`flex items-start gap-3 ${
                 message.sender === 'user' ? 'flex-row-reverse' : ''
               }`}
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                 message.sender === 'user' 
                   ? 'bg-primary text-primary-foreground' 
-                  : 'bg-muted text-muted-foreground'
+                  : 'bg-muted border text-muted-foreground'
               }`}>
                 {message.sender === 'user' ? (
                   <User className="w-4 h-4" />
@@ -191,11 +191,11 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
               </div>
               <div className={`max-w-[80%] p-3 rounded-lg ${
                 message.sender === 'user'
-                  ? 'bg-primary text-primary-foreground ml-auto'
-                  : 'bg-background border'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background border shadow-sm'
               }`}>
-                <p className="text-sm">{message.content}</p>
-                <p className="text-xs opacity-70 mt-1">
+                <p className="text-sm leading-relaxed">{message.content}</p>
+                <p className="text-xs opacity-70 mt-2">
                   {message.timestamp.toLocaleTimeString()}
                 </p>
               </div>
@@ -204,11 +204,11 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
           
           {/* Typing Indicator */}
           {isTyping && (
-            <div className="flex items-start gap-2">
-              <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-muted border text-muted-foreground flex items-center justify-center">
                 <Bot className="w-4 h-4" />
               </div>
-              <div className="bg-background border p-3 rounded-lg">
+              <div className="bg-background border shadow-sm p-3 rounded-lg">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -222,16 +222,16 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
 
         {/* Suggested Questions */}
         {messages.length <= 1 && (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Try asking:</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-muted-foreground">Try asking:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {suggestedQuestions.map((question, index) => (
                 <Button
                   key={index}
                   variant="outline"
                   size="sm"
                   onClick={() => setInputMessage(question)}
-                  className="text-xs"
+                  className="text-xs text-left justify-start h-auto py-2 px-3"
                 >
                   {question}
                 </Button>
@@ -241,20 +241,20 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
         )}
 
         {/* Input Area */}
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Ask me about cry analysis, patterns, or interpretations..."
-            className="flex-1 min-h-[40px] max-h-[120px] px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="flex-1 min-h-[44px] max-h-[120px] px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
             disabled={isTyping}
           />
           <Button
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || isTyping}
             size="sm"
-            className="px-3"
+            className="px-4 h-11"
           >
             <Send className="w-4 h-4" />
           </Button>

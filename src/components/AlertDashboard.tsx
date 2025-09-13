@@ -50,33 +50,36 @@ export const AlertDashboard: React.FC<AlertDashboardProps> = ({ detectionResults
   };
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-8">
       {/* Status Overview */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl">Monitoring Status</CardTitle>
-            <Badge variant={isMonitoring ? 'success' : 'secondary'}>
+            <CardTitle className="text-lg font-semibold">Monitoring Status</CardTitle>
+            <Badge 
+              variant={isMonitoring ? 'default' : 'secondary'}
+              className="px-3 py-1"
+            >
               {isMonitoring ? 'Active' : 'Inactive'}
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-primary">{detectionResults.length}</div>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-muted/30 rounded-lg">
+              <div className="text-2xl font-bold text-foreground mb-1">{detectionResults.length}</div>
               <div className="text-sm text-muted-foreground">Total Sessions</div>
             </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{currentAlerts.length}</div>
+            <div className="text-center p-4 bg-muted/30 rounded-lg">
+              <div className="text-2xl font-bold text-orange-600 mb-1">{currentAlerts.length}</div>
               <div className="text-sm text-muted-foreground">Active Alerts</div>
             </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-red-600">{criticalAlerts.length}</div>
+            <div className="text-center p-4 bg-muted/30 rounded-lg">
+              <div className="text-2xl font-bold text-red-600 mb-1">{criticalAlerts.length}</div>
               <div className="text-sm text-muted-foreground">Critical Events</div>
             </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className={`text-2xl font-bold ${
+            <div className="text-center p-4 bg-muted/30 rounded-lg">
+              <div className={`text-2xl font-bold mb-1 ${
                 currentRiskLevel === 'critical' ? 'text-red-600' :
                 currentRiskLevel === 'high' ? 'text-orange-600' :
                 currentRiskLevel === 'medium' ? 'text-yellow-600' : 'text-green-600'
@@ -91,14 +94,14 @@ export const AlertDashboard: React.FC<AlertDashboardProps> = ({ detectionResults
 
       {/* Critical Alerts */}
       {criticalAlerts.length > 0 && (
-        <AlertComponent variant="destructive">
+        <AlertComponent variant="destructive" className="border-red-200 bg-red-50/50">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Critical Alert</AlertTitle>
           <AlertDescription>
             {criticalAlerts.length} critical issue(s) detected. Immediate medical attention may be required.
-            <div className="mt-2 space-y-1">
+            <div className="mt-3 space-y-2">
               {criticalAlerts.map((alert, index) => (
-                <div key={index} className="text-sm font-medium">
+                <div key={index} className="text-sm font-medium p-2 bg-red-100/50 rounded border-l-2 border-red-500">
                   • {alert.message}: {alert.recommendation}
                 </div>
               ))}
@@ -109,31 +112,32 @@ export const AlertDashboard: React.FC<AlertDashboardProps> = ({ detectionResults
 
       {/* Current Active Alerts */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Current Alerts</CardTitle>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold">Current Alerts</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {currentAlerts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No active alerts - monitoring normal</p>
+            <div className="text-center py-12 text-muted-foreground">
+              <Activity className="w-16 h-16 mx-auto mb-4 opacity-40" />
+              <h3 className="font-medium mb-2">No Active Alerts</h3>
+              <p className="text-sm">Monitoring normal - no issues detected</p>
             </div>
           ) : (
             <div className="space-y-4">
               {currentAlerts.map((alert, index) => (
-                <div key={index} className="border rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1">{getAlertIcon(alert.type)}</div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-semibold">{alert.message}</span>
+                <div key={index} className="p-4 bg-muted/30 rounded-lg border border-muted">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 text-muted-foreground">{getAlertIcon(alert.type)}</div>
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-foreground">{alert.message}</span>
                         <Badge variant={getBadgeVariant(alert.severity)}>
                           {alert.severity.toUpperCase()}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">{alert.description}</p>
-                      <p className="text-sm font-medium mb-2">{alert.recommendation}</p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground leading-relaxed">{alert.description}</p>
+                      <p className="text-sm font-medium text-foreground">{alert.recommendation}</p>
+                      <div className="flex items-center gap-6 text-xs text-muted-foreground pt-2 border-t border-muted">
                         <span>Confidence: {(alert.confidence * 100).toFixed(0)}%</span>
                         <span>Type: {alert.type}</span>
                       </div>
@@ -148,36 +152,51 @@ export const AlertDashboard: React.FC<AlertDashboardProps> = ({ detectionResults
 
       {/* Recent Analysis History */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Recent Analysis</CardTitle>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold">Recent Analysis</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {detectionResults.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Stethoscope className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No analysis data available</p>
+            <div className="text-center py-12 text-muted-foreground">
+              <Stethoscope className="w-16 h-16 mx-auto mb-4 opacity-40" />
+              <h3 className="font-medium mb-2">No Analysis Data</h3>
+              <p className="text-sm">Start recording to see analysis results</p>
             </div>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {detectionResults.slice(-10).reverse().map((result, index) => (
-                <div key={index} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">
+                <div key={index} className="p-4 bg-muted/30 rounded-lg border border-muted">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-muted-foreground font-medium">
                       {result.timestamp.toLocaleTimeString()}
                     </span>
                     <Badge variant={getBadgeVariant(result.riskLevel)}>
                       {result.riskLevel}
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                    <div>F0: <span className="font-mono">{result.features.f0Mean.toFixed(0)}Hz</span></div>
-                    <div>Duration: <span className="font-mono">{result.features.duration.toFixed(1)}s</span></div>
-                    <div>HNR: <span className="font-mono">{result.features.hnr.toFixed(1)}dB</span></div>
-                    <div>Alerts: <span className="font-mono">{result.alerts.length}</span></div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">F0 (Hz)</div>
+                      <div className="font-mono text-foreground">{result.features.f0Mean.toFixed(0)}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Duration</div>
+                      <div className="font-mono text-foreground">{result.features.duration.toFixed(1)}s</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">HNR (dB)</div>
+                      <div className="font-mono text-foreground">{result.features.hnr.toFixed(1)}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Alerts</div>
+                      <div className="font-mono text-foreground">{result.alerts.length}</div>
+                    </div>
                   </div>
                   {result.alerts.length > 0 && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Alert types: {result.alerts.map(a => a.type).join(', ')}
+                    <div className="mt-3 pt-3 border-t border-muted">
+                      <div className="text-xs text-muted-foreground">
+                        Alert types: {result.alerts.map(a => a.type).join(', ')}
+                      </div>
                     </div>
                   )}
                 </div>

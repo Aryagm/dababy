@@ -11,17 +11,15 @@ interface FeatureDisplayProps {
 export const FeatureDisplay: React.FC<FeatureDisplayProps> = ({ features }) => {
   if (!features) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Audio Features</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No audio data available</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="w-full">
+        <Card>
+          <CardContent className="text-center py-16">
+            <Activity className="w-16 h-16 mx-auto text-muted-foreground/40 mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Audio Features Available</h3>
+            <p className="text-muted-foreground">Record audio to see detailed feature analysis</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -181,59 +179,51 @@ export const FeatureDisplay: React.FC<FeatureDisplayProps> = ({ features }) => {
   ];
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Audio Features Analysis</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featureGroups.map((group, groupIndex) => (
-              <Card key={groupIndex} className="border-muted">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="text-muted-foreground">{group.icon}</div>
-                    <CardTitle className="text-base">{group.title}</CardTitle>
+    <div className="w-full space-y-8">
+      {/* Feature Groups Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {featureGroups.map((group, groupIndex) => (
+          <Card key={groupIndex} className="border-muted/50">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="text-primary">{group.icon}</div>
+                <CardTitle className="text-base font-semibold">{group.title}</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-4">
+              {group.items.map((item, itemIndex) => (
+                <div key={itemIndex} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {item.label}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-medium">
+                        {item.value}
+                      </span>
+                      {item.badge}
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-3">
-                    {group.items.map((item, itemIndex) => (
-                      <div key={itemIndex} className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {item.label}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-mono">
-                              {item.value}
-                            </span>
-                            {item.badge}
-                          </div>
-                        </div>
-                        {item.description && (
-                          <p className="text-xs text-muted-foreground">
-                            {item.description}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground leading-relaxed pl-2 border-l-2 border-muted">
+                      {item.description}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* F0 Contour Visualization */}
       {features.f0.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">F0 Contour Analysis</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold">F0 Contour Analysis</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-20 flex items-end justify-center gap-1 bg-muted/30 rounded-lg p-4">
+          <CardContent className="pt-0">
+            <div className="h-24 flex items-end justify-center gap-0.5 bg-muted/20 rounded-lg p-4 mb-4">
               {features.f0.slice(0, 50).map((f0, index) => {
                 const normalizedHeight = Math.min((f0 - 100) / 1000, 1) * 100;
                 const isElevated = f0 > 1000;
@@ -245,19 +235,35 @@ export const FeatureDisplay: React.FC<FeatureDisplayProps> = ({ features }) => {
                     className={`w-1 rounded-t-sm transition-all duration-100 ${
                       isElevated ? 'bg-red-500' : 
                       isHigh ? 'bg-yellow-500' : 
-                      'bg-primary/60'
+                      'bg-primary/70'
                     }`}
                     style={{
-                      height: `${Math.max(normalizedHeight, 2)}%`,
-                      minHeight: '2px'
+                      height: `${Math.max(normalizedHeight, 3)}%`,
+                      minHeight: '3px'
                     }}
                     title={`${f0.toFixed(0)} Hz`}
                   />
                 );
               })}
             </div>
-            <div className="text-xs text-muted-foreground mt-2 text-center">
-              Fundamental frequency over time (first 50 frames) • Red: {'>'} 1000Hz • Yellow: {'>'} 800Hz
+            <div className="text-center space-y-2">
+              <div className="text-xs text-muted-foreground">
+                Fundamental frequency over time (first 50 frames)
+              </div>
+              <div className="flex justify-center gap-4 text-xs">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-primary/70 rounded"></div>
+                  <span className="text-muted-foreground">Normal</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-yellow-500 rounded"></div>
+                  <span className="text-muted-foreground">{'>'}800Hz</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-red-500 rounded"></div>
+                  <span className="text-muted-foreground">{'>'}1000Hz</span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

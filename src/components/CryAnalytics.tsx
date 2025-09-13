@@ -128,20 +128,21 @@ export const CryAnalytics: React.FC<CryAnalyticsProps> = ({ className = '' }) =>
   };
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`w-full space-y-8 ${className}`}>
       {/* Header with Timeframe Selection */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <BarChart3 className="w-6 h-6 text-primary" />
           <h2 className="text-xl font-semibold">Cry Analytics</h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1 p-1 bg-muted rounded-lg">
           {(['1h', '6h', '24h', 'all'] as const).map((timeframe) => (
             <Button
               key={timeframe}
-              variant={selectedTimeframe === timeframe ? 'default' : 'outline'}
+              variant={selectedTimeframe === timeframe ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setSelectedTimeframe(timeframe)}
+              className="px-3 py-1.5 text-xs"
             >
               {timeframe === 'all' ? 'All Time' : timeframe.toUpperCase()}
             </Button>
@@ -152,51 +153,51 @@ export const CryAnalytics: React.FC<CryAnalyticsProps> = ({ className = '' }) =>
       {analytics ? (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 pb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Cries</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Total Cries</p>
                     <p className="text-2xl font-bold">{analytics.totalCries}</p>
                   </div>
-                  <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                  <TrendingUp className="w-5 h-5 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 pb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Avg Duration</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Avg Duration</p>
                     <p className="text-2xl font-bold">{formatDuration(analytics.avgDuration)}</p>
                   </div>
-                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <Clock className="w-5 h-5 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 pb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Cries/Hour</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Cries/Hour</p>
                     <p className="text-2xl font-bold">{analytics.criesPerHour.toFixed(1)}</p>
                   </div>
-                  <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                  <BarChart3 className="w-5 h-5 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 pb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Critical Alerts</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Critical Alerts</p>
                     <p className="text-2xl font-bold">{analytics.criticalAlerts}</p>
                   </div>
-                  <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                  <AlertTriangle className="w-5 h-5 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
@@ -205,24 +206,24 @@ export const CryAnalytics: React.FC<CryAnalyticsProps> = ({ className = '' }) =>
           {/* Diagnosis Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Diagnosis Breakdown</CardTitle>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-semibold">Diagnosis Breakdown</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="pt-0">
+                <div className="space-y-4">
                   {Object.entries(analytics.diagnosisBreakdown)
                     .sort(([,a], [,b]) => b - a)
                     .map(([diagnosis, count]) => (
                       <div key={diagnosis} className="flex items-center justify-between">
-                        <span className="text-sm">{diagnosis}</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-muted rounded-full h-2">
+                        <span className="text-sm font-medium">{diagnosis}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="w-20 bg-muted rounded-full h-2">
                             <div 
-                              className="bg-primary h-2 rounded-full transition-all" 
+                              className="bg-primary h-2 rounded-full transition-all duration-300" 
                               style={{ width: `${(count / analytics.totalCries) * 100}%` }}
                             />
                           </div>
-                          <span className="text-sm font-medium w-8 text-right">{count}</span>
+                          <span className="text-sm font-bold w-6 text-right">{count}</span>
                         </div>
                       </div>
                     ))}
@@ -231,26 +232,26 @@ export const CryAnalytics: React.FC<CryAnalyticsProps> = ({ className = '' }) =>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Risk Level Distribution</CardTitle>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-semibold">Risk Level Distribution</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="pt-0">
+                <div className="space-y-4">
                   {Object.entries(analytics.riskLevelCounts)
                     .sort(([,a], [,b]) => b - a)
                     .map(([risk, count]) => (
                       <div key={risk} className="flex items-center justify-between">
-                        <Badge variant={getRiskBadgeVariant(risk)} className="capitalize">
+                        <Badge variant={getRiskBadgeVariant(risk)} className="capitalize px-3 py-1">
                           {risk}
                         </Badge>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-muted rounded-full h-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-20 bg-muted rounded-full h-2">
                             <div 
-                              className="bg-primary h-2 rounded-full transition-all" 
+                              className="bg-primary h-2 rounded-full transition-all duration-300" 
                               style={{ width: `${(count / analytics.totalCries) * 100}%` }}
                             />
                           </div>
-                          <span className="text-sm font-medium w-8 text-right">{count}</span>
+                          <span className="text-sm font-bold w-6 text-right">{count}</span>
                         </div>
                       </div>
                     ))}
@@ -261,45 +262,47 @@ export const CryAnalytics: React.FC<CryAnalyticsProps> = ({ className = '' }) =>
 
           {/* Recent Cries */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Recent Cries</CardTitle>
-              <Button variant="outline" size="sm" onClick={clearAllData}>
-                <Trash2 className="w-4 h-4 mr-2" />
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <CardTitle className="text-lg font-semibold">Recent Cries</CardTitle>
+              <Button variant="outline" size="sm" onClick={clearAllData} className="text-xs">
+                <Trash2 className="w-3 h-3 mr-2" />
                 Clear All Data
               </Button>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+            <CardContent className="pt-0">
+              <div className="space-y-4">
                 {cries.slice(0, 10).map((cry) => (
-                  <div key={cry.id} className="border rounded-lg p-4 space-y-3">
+                  <div key={cry.id} className="p-4 bg-muted/30 rounded-lg border border-muted space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <Badge variant={getRiskBadgeVariant(cry.riskLevel)}>
+                        <Badge variant={getRiskBadgeVariant(cry.riskLevel)} className="px-2 py-1">
                           {cry.riskLevel.toUpperCase()}
                         </Badge>
                         <div>
-                          <p className="font-medium">{cry.diagnosis.primary}</p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="font-medium text-sm">{cry.diagnosis.primary}</p>
+                          <p className="text-xs text-muted-foreground">
                             Duration: {formatDuration(cry.duration)} • 
                             Confidence: {(cry.confidence * 100).toFixed(0)}%
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {formatTimeAgo(cry.timestamp)}
                         </p>
                       </div>
                     </div>
                     
                     {/* Audio Player */}
-                    <CryAudioPlayer cryId={cry.id} className="pt-2 border-t" />
+                    <CryAudioPlayer cryId={cry.id} className="pt-3 border-t border-muted/50" />
                   </div>
                 ))}
                 {cries.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8">
-                    No cries recorded in the selected timeframe
-                  </p>
+                  <div className="text-center py-12 text-muted-foreground">
+                    <BarChart3 className="w-16 h-16 mx-auto mb-4 opacity-40" />
+                    <h3 className="font-medium mb-2">No Cries Recorded</h3>
+                    <p className="text-sm">No cries recorded in the selected timeframe</p>
+                  </div>
                 )}
               </div>
             </CardContent>
@@ -307,8 +310,8 @@ export const CryAnalytics: React.FC<CryAnalyticsProps> = ({ className = '' }) =>
         </>
       ) : (
         <Card>
-          <CardContent className="text-center py-12">
-            <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <CardContent className="text-center py-16">
+            <BarChart3 className="w-16 h-16 mx-auto text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-medium mb-2">No Data Available</h3>
             <p className="text-muted-foreground">
               Record some cries to see analytics and patterns

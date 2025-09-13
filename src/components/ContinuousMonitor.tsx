@@ -18,7 +18,7 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
   isMonitoring, 
   onMonitoringChange 
 }) => {
-  const [waveformData, setWaveformData] = useState<number[]>(Array(40).fill(0));
+  const [waveformData, setWaveformData] = useState<number[]>(Array(60).fill(0));
   const [currentLevel, setCurrentLevel] = useState<number>(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -84,8 +84,8 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
     const avgLevel = Array.from(dataArray).reduce((sum, val) => sum + val, 0) / dataArray.length / 255;
     setCurrentLevel(avgLevel);
     
-    // Process data into 40 bars
-    const bars = 40;
+    // Process data into 60 bars
+    const bars = 60;
     const usableRange = Math.floor(bufferLength * 0.8);
     const samplesPerBar = Math.floor(usableRange / bars);
     const waveData: number[] = [];
@@ -264,7 +264,7 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
           </p>
           
           {/* Professional Waveform Visualization */}
-          <div className="h-24 flex items-end justify-center gap-1 bg-muted/30 rounded-lg p-4">
+          <div className="h-24 flex items-end justify-between bg-muted/30 rounded-lg p-4">
             {waveformData.map((value, index) => (
               <WaveformBar
                 key={index}
@@ -272,7 +272,7 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
                 max={100}
                 height="3px"
                 isActive={isMonitoring}
-                className="transition-all duration-100"
+                className="transition-all duration-100 flex-1 mx-0.5"
               />
             ))}
           </div>
