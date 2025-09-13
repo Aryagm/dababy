@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { WaveformBar } from '@/components/ui/progress';
+import { Play, Pause, Activity } from 'lucide-react';
 import { AudioAnalyzer, type DetectionResult } from '@/lib/audioAnalysis';
 
 interface ContinuousMonitorProps {
@@ -220,108 +223,83 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
     };
   }, []);
 
-  // Activity indicator based on audio level
-  const getActivityColor = () => {
-    if (currentLevel > 0.3) return 'bg-red-500';
-    if (currentLevel > 0.1) return 'bg-yellow-500';
-    if (currentLevel > 0.05) return 'bg-green-500';
-    return 'bg-gray-400';
-  };
-
   return (
-    <div className="flex flex-col items-center gap-6">
-      {/* Status Banner */}
-      <div className={`w-full p-4 rounded-xl border-2 ${
-        isMonitoring 
-          ? 'border-green-500 bg-green-50' 
-          : 'border-gray-300 bg-gray-50'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-4 h-4 rounded-full ${
-              isMonitoring ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-            }`} />
-            <span className="font-semibold text-lg">
-              {isMonitoring ? 'Continuous Monitoring Active' : 'Monitoring Stopped'}
-            </span>
+    <div className="w-full max-w-2xl mx-auto space-y-6">
+      <Card>
+        <CardHeader className="text-center">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Activity className="w-5 h-5" />
+            <CardTitle className="text-xl">Continuous Monitoring</CardTitle>
           </div>
+          <Badge variant={isMonitoring ? 'success' : 'secondary'} className="mx-auto w-fit">
+            {isMonitoring ? 'Active' : 'Inactive'}
+          </Badge>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          <p className="text-center text-muted-foreground">
+            {isMonitoring 
+              ? 'Continuously monitoring for baby cry patterns'
+              : 'Start monitoring to begin automatic cry detection'
+            }
+          </p>
+          
+          {/* Professional Waveform Visualization */}
+          <div className="h-24 flex items-end justify-center gap-1 bg-muted/30 rounded-lg p-4">
+            {waveformData.map((value, index) => (
+              <WaveformBar
+                key={index}
+                value={value * 100}
+                max={100}
+                height="3px"
+                isActive={isMonitoring}
+                className="transition-all duration-100"
+              />
+            ))}
+          </div>
+          
+          {/* Activity Level Display */}
           {isMonitoring && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Activity:</span>
-              <div className={`w-3 h-3 rounded-full ${getActivityColor()}`} />
-              <span className="text-sm font-mono">
-                {(currentLevel * 100).toFixed(0)}%
-              </span>
+            <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+              <span>Activity Level:</span>
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full transition-colors ${
+                  currentLevel > 0.3 ? 'bg-red-500' :
+                  currentLevel > 0.1 ? 'bg-yellow-500' :
+                  currentLevel > 0.05 ? 'bg-green-500' : 'bg-muted'
+                }`} />
+                <span className="font-mono text-sm">
+                  {(currentLevel * 100).toFixed(0)}%
+                </span>
+              </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Waveform Visualization */}
-      <div className="flex items-center justify-center h-32 w-96 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl p-6 shadow-inner">
-        <div className="flex items-end justify-center gap-1 h-full w-full">
-          {waveformData.map((value, index) => {
-            const intensity = Math.min(value * 1.2, 1);
-            const hue = 200 + (index / waveformData.length) * 60;
-            
-            return (
-              <div
-                key={index}
-                className="rounded-t-sm transition-all duration-100"
-                style={{
-                  height: `${Math.max(intensity * 100, isMonitoring ? 4 : 8)}%`,
-                  width: `${100 / waveformData.length - 0.5}%`,
-                  minHeight: isMonitoring ? '4px' : '8px',
-                  backgroundColor: isMonitoring 
-                    ? `hsl(${hue}, ${intensity * 100}%, ${50 + intensity * 20}%)`
-                    : 'hsl(220, 30%, 70%)',
-                  opacity: isMonitoring ? (0.6 + intensity * 0.4) : 0.4,
-                  boxShadow: intensity > 0.3 && isMonitoring ? `0 0 8px hsl(${hue}, 100%, 60%)` : 'none',
-                }}
-              />
-            );
-          })}
-        </div>
-        {!isMonitoring && (
-          <div className="absolute text-gray-500 text-sm font-medium">
-            Ready to Monitor
+          
+          {/* Control Button */}
+          <div className="flex justify-center">
+            {!isMonitoring ? (
+              <Button
+                onClick={startMonitoring}
+                size="lg"
+                className="px-8"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Start Monitoring
+              </Button>
+            ) : (
+              <Button
+                onClick={stopMonitoring}
+                size="lg"
+                variant="destructive"
+                className="px-8"
+              >
+                <Pause className="w-5 h-5 mr-2" />
+                Stop Monitoring
+              </Button>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Control Button */}
-      <div className="flex gap-4">
-        {!isMonitoring ? (
-          <Button
-            onClick={startMonitoring}
-            size="lg"
-            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-          >
-            <Play className="w-6 h-6 mr-3" />
-            Start Continuous Monitoring
-          </Button>
-        ) : (
-          <Button
-            onClick={stopMonitoring}
-            size="lg"
-            variant="destructive"
-            className="px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-          >
-            <Pause className="w-6 h-6 mr-3" />
-            Stop Monitoring
-          </Button>
-        )}
-      </div>
-
-      {/* Instructions */}
-      <div className="text-center text-gray-600 max-w-md">
-        <p className="text-sm">
-          {isMonitoring 
-            ? 'The system is continuously monitoring for baby cries and will automatically analyze detected audio patterns.'
-            : 'Click "Start Continuous Monitoring" to begin real-time baby cry detection and analysis.'
-          }
-        </p>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

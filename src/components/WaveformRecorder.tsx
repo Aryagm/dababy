@@ -1,14 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, Square } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { WaveformBar } from '@/components/ui/progress';
+import { Mic, Square, Brain, Search, CheckCircle } from 'lucide-react';
 
 interface WaveformRecorderProps {
   onRecordingComplete?: (audioBlob: Blob) => void;
 }
 
+type RecordingPhase = 'idle' | 'recording' | 'cry-detected' | 'analyzing' | 'complete';
+
 export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingComplete }) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [waveformData, setWaveformData] = useState<number[]>(Array(40).fill(0));
+  const [phase, setPhase] = useState<RecordingPhase>('idle');
+  const [waveformData, setWaveformData] = useState<number[]>(Array(50).fill(0));
+  const [cryDetected, setCryDetected] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -16,38 +22,41 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
   const animationRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const cryDetectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const updateWaveform = () => {
-    if (!analyserRef.current) {
-      console.log('Waveform update stopped - no analyser');
-      return;
-    }
-    
-    // Don't rely on isRecording state for animation, check if mediaRecorder is active
-    const isActivelyRecording = mediaRecorderRef.current?.state === 'recording';
-    
-    if (!isActivelyRecording) {
-      console.log('Waveform update stopped - not actively recording, state:', mediaRecorderRef.current?.state);
+    if (!analyserRef.current || phase === 'idle') {
       return;
     }
     
     const bufferLength = analyserRef.current.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
-    // Get frequency data instead of time domain for better visualization
     analyserRef.current.getByteFrequencyData(dataArray);
     
-    // Log raw data for debugging
-    const rawSum = Array.from(dataArray).reduce((sum, val) => sum + val, 0);
-    const rawAverage = rawSum / dataArray.length;
+    // Calculate overall level for cry detection
+    const avgLevel = Array.from(dataArray).reduce((sum, val) => sum + val, 0) / dataArray.length / 255;
     
-    if (rawAverage > 1) {
-      console.log('Raw audio data detected - average:', rawAverage, 'max:', Math.max(...dataArray));
+    // Simple cry detection threshold (improved version would use more sophisticated algorithm)
+    if (avgLevel > 0.15 && phase === 'recording' && !cryDetected) {
+      setCryDetected(true);
+      setPhase('cry-detected');
+      
+      // Simulate analysis phase after cry detection
+      cryDetectionTimeoutRef.current = setTimeout(() => {
+        setPhase('analyzing');
+        
+        // Simulate analysis completion
+        setTimeout(() => {
+          setPhase('complete');
+          stopRecording();
+        }, 3000); // 3 seconds of analysis
+      }, 1500); // 1.5 seconds showing "cry detected"
     }
     
-    // Process data into 40 bars - spread across full frequency range
-    const bars = 40;
-    const usableRange = Math.floor(bufferLength * 0.8); // Use 80% of frequency range
+    // Process data into 50 bars for better resolution
+    const bars = 50;
+    const usableRange = Math.floor(bufferLength * 0.8);
     const samplesPerBar = Math.floor(usableRange / bars);
     const waveData: number[] = [];
     
@@ -63,11 +72,9 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
       }
       
       if (count > 0) {
-        // Average and normalize (0-255 to 0-1)
         const average = sum / count;
         const normalized = average / 255;
-        // Reduce amplification and add logarithmic scaling for better visual balance
-        const scaled = Math.pow(normalized, 0.7) * 1.5; // Less aggressive amplification
+        const scaled = Math.pow(normalized, 0.7) * 1.2;
         waveData.push(Math.min(scaled, 1));
       } else {
         waveData.push(0);
@@ -76,21 +83,56 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
     
     setWaveformData(waveData);
     
-    // Debug: log max value to console
-    const maxValue = Math.max(...waveData);
-    if (maxValue > 0.01) {
-      console.log('Processed waveform data - max value:', maxValue);
-    }
-    
-    // Continue animation if still recording
-    if (isActivelyRecording) {
+    // Continue animation if recording
+    if (phase !== 'idle' && phase !== 'complete') {
       animationRef.current = requestAnimationFrame(updateWaveform);
+    }
+  };
+
+  const getPhaseDisplay = () => {
+    switch (phase) {
+      case 'idle':
+        return {
+          title: 'Ready to Record',
+          description: 'Click start to begin cry detection',
+          badge: { text: 'Idle', variant: 'secondary' as const },
+          icon: <Mic className="w-5 h-5" />
+        };
+      case 'recording':
+        return {
+          title: 'Listening for Crying',
+          description: 'Monitoring audio for baby cry patterns',
+          badge: { text: 'Recording', variant: 'info' as const },
+          icon: <Search className="w-5 h-5 animate-pulse" />
+        };
+      case 'cry-detected':
+        return {
+          title: 'Cry Detected',
+          description: 'Baby cry pattern identified',
+          badge: { text: 'Cry Found', variant: 'warning' as const },
+          icon: <Brain className="w-5 h-5" />
+        };
+      case 'analyzing':
+        return {
+          title: 'Analyzing Cry Pattern',
+          description: 'Processing acoustic features and patterns',
+          badge: { text: 'Analyzing', variant: 'default' as const },
+          icon: <Brain className="w-5 h-5 animate-pulse" />
+        };
+      case 'complete':
+        return {
+          title: 'Analysis Complete',
+          description: 'Cry analysis finished successfully',
+          badge: { text: 'Complete', variant: 'success' as const },
+          icon: <CheckCircle className="w-5 h-5" />
+        };
+      default:
+        return getPhaseDisplay();
     }
   };
 
   const startRecording = async () => {
     try {
-      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -106,7 +148,6 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
       const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       audioContextRef.current = new AudioContextClass();
       
-      // Resume audio context if suspended
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
@@ -114,15 +155,10 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       
-      // Configure analyser for better responsiveness and frequency distribution
-      analyserRef.current.fftSize = 1024; // Larger for better frequency resolution
-      analyserRef.current.smoothingTimeConstant = 0.3; // Moderate smoothing
-      analyserRef.current.minDecibels = -80; // Better dynamic range
+      analyserRef.current.fftSize = 1024;
+      analyserRef.current.smoothingTimeConstant = 0.3;
+      analyserRef.current.minDecibels = -80;
       analyserRef.current.maxDecibels = -20;
-      
-      console.log('Audio context created, sample rate:', audioContextRef.current.sampleRate);
-      console.log('Audio context state:', audioContextRef.current.state);
-      console.log('Analyser frequency bin count:', analyserRef.current.frequencyBinCount);
       
       source.connect(analyserRef.current);
       
@@ -152,14 +188,11 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
         }
       };
       
-      // Start recording
-      mediaRecorderRef.current.start(100); // Collect data every 100ms
-      console.log('MediaRecorder started, state:', mediaRecorderRef.current.state);
-      setIsRecording(true);
-      console.log('Set isRecording to true');
+      mediaRecorderRef.current.start(100);
+      setPhase('recording');
+      setCryDetected(false);
       
-      // Start waveform animation immediately
-      console.log('Starting waveform animation...');
+      // Start waveform animation
       animationRef.current = requestAnimationFrame(updateWaveform);
       
     } catch (error) {
@@ -169,18 +202,30 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Stop animation
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      
-      // Reset waveform
-      setWaveformData(Array(40).fill(0));
     }
+    
+    if (cryDetectionTimeoutRef.current) {
+      clearTimeout(cryDetectionTimeoutRef.current);
+    }
+    
+    // Stop animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    
+    // Reset after a delay to show completion state
+    setTimeout(() => {
+      setPhase('idle');
+      setWaveformData(Array(50).fill(0));
+      setCryDetected(false);
+    }, 2000);
+  };
+
+  const handleStopRecording = () => {
+    setPhase('complete');
+    stopRecording();
   };
 
   useEffect(() => {
@@ -188,6 +233,9 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
       // Cleanup on unmount
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
+      }
+      if (cryDetectionTimeoutRef.current) {
+        clearTimeout(cryDetectionTimeoutRef.current);
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -198,71 +246,83 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onRecordingC
     };
   }, []);
 
+  const phaseDisplay = getPhaseDisplay();
+
   return (
-    <div className="flex flex-col items-center gap-6">
-      {/* Waveform Visualization */}
-      <div className="flex items-center justify-center h-32 w-96 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl p-6 shadow-inner">
-        <div className="flex items-end justify-center gap-1 h-full w-full">
-          {waveformData.map((value, index) => {
-            // Create a gradient effect from low to high frequencies
-            const intensity = Math.min(value * 1.2, 1);
-            const hue = 200 + (index / waveformData.length) * 60; // Blue to cyan gradient
-            
-            return (
-              <div
-                key={index}
-                className="rounded-t-sm transition-all duration-100"
-                style={{
-                  height: `${Math.max(intensity * 100, 4)}%`,
-                  width: `${100 / waveformData.length - 0.5}%`,
-                  minHeight: '4px',
-                  backgroundColor: `hsl(${hue}, ${intensity * 100}%, ${50 + intensity * 20}%)`,
-                  opacity: isRecording ? (0.6 + intensity * 0.4) : 0.3,
-                  boxShadow: intensity > 0.3 ? `0 0 8px hsl(${hue}, 100%, 60%)` : 'none',
-                }}
-              />
-            );
-          })}
-        </div>
-        {/* Debug info */}
-        {isRecording && (
-          <div className="absolute mt-24 text-xs text-gray-500">
-            Max: {Math.max(...waveformData).toFixed(2)}
+    <div className="w-full max-w-2xl mx-auto space-y-6">
+      <Card>
+        <CardHeader className="text-center">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            {phaseDisplay.icon}
+            <CardTitle className="text-xl">{phaseDisplay.title}</CardTitle>
           </div>
-        )}
-      </div>
-
-      {/* Control Button */}
-      <div className="flex gap-4">
-        {!isRecording ? (
-          <Button
-            onClick={startRecording}
-            size="lg"
-            className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-          >
-            <Mic className="w-6 h-6 mr-3" />
-            Start Recording
-          </Button>
-        ) : (
-          <Button
-            onClick={stopRecording}
-            size="lg"
-            variant="destructive"
-            className="px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-          >
-            <Square className="w-6 h-6 mr-3" />
-            Stop Recording
-          </Button>
-        )}
-      </div>
-
-      {/* Recording Status */}
-      {isRecording && (
-        <div className="flex items-center gap-3 text-red-500 font-semibold text-lg">
-          <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse shadow-lg" />
-          Recording in progress...
-        </div>
-      )}
+          <Badge variant={phaseDisplay.badge.variant} className="mx-auto w-fit">
+            {phaseDisplay.badge.text}
+          </Badge>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          <p className="text-center text-muted-foreground">
+            {phaseDisplay.description}
+          </p>
+          
+          {/* Professional Waveform Visualization */}
+          <div className="h-24 flex items-end justify-center gap-1 bg-muted/30 rounded-lg p-4">
+            {waveformData.map((value, index) => (
+              <WaveformBar
+                key={index}
+                value={value * 100}
+                max={100}
+                height="3px"
+                isActive={phase !== 'idle'}
+                className={`transition-all duration-100 ${
+                  phase === 'cry-detected' 
+                    ? 'bg-yellow-500' 
+                    : phase === 'analyzing' 
+                    ? 'bg-blue-500' 
+                    : phase === 'complete'
+                    ? 'bg-green-500'
+                    : ''
+                }`}
+              />
+            ))}
+          </div>
+          
+          {/* Control Button */}
+          <div className="flex justify-center">
+            {phase === 'idle' ? (
+              <Button
+                onClick={startRecording}
+                size="lg"
+                className="px-8"
+              >
+                <Mic className="w-5 h-5 mr-2" />
+                Start Cry Detection
+              </Button>
+            ) : phase === 'complete' ? (
+              <Button
+                onClick={() => setPhase('idle')}
+                size="lg"
+                variant="outline"
+                className="px-8"
+              >
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Ready for Next Recording
+              </Button>
+            ) : (
+              <Button
+                onClick={handleStopRecording}
+                size="lg"
+                variant="destructive"
+                className="px-8"
+              >
+                <Square className="w-5 h-5 mr-2" />
+                Stop Recording
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
