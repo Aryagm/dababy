@@ -48,21 +48,45 @@ export interface CryAnalytics {
 
 export class CryDetectionEngine {
   private onCryDetected: (features: AudioFeatures) => void;
-  private cryThreshold = 0.1;
+  private cryThreshold = 0.15; // Increased threshold to reduce false positives
   private isDetectingCry = false;
   private detectionStartTime: number | null = null;
   private analysisBuffer: Float32Array[] = [];
+  private backgroundNoiseLevel = 0.02;
+  private noiseBuffer: number[] = [];
+  private consecutiveDetections = 0;
+  private requiredConsecutiveDetections = 3; // Require multiple consecutive detections
 
   constructor(onCryDetected: (features: AudioFeatures) => void) {
     this.onCryDetected = onCryDetected;
   }
 
-  // Enhanced cry detection with filtering
+  // Enhanced cry detection with advanced filtering
   processSample(audioData: Float32Array, sampleRate: number): boolean {
     const rms = this.calculateRMS(audioData);
-    const isCryingLevel = rms > this.cryThreshold;
+    
+    // Update background noise estimation
+    this.updateBackgroundNoise(rms);
+    
+    // Dynamic threshold based on background noise
+    const dynamicThreshold = Math.max(this.cryThreshold, this.backgroundNoiseLevel * 3);
+    
+    // Pre-filter: Check if this could be a cry based on frequency content
+    const dominantFreq = this.getDominantFrequency(audioData, sampleRate);
+    const spectralCentroid = this.calculateSpectralCentroid(audioData, sampleRate);
+    
+    // Baby cry frequency characteristics: 300-1200 Hz dominant, high spectral centroid
+    const hasValidFrequency = dominantFreq >= 250 && dominantFreq <= 1500 && spectralCentroid > 400;
+    const isCryingLevel = rms > dynamicThreshold && hasValidFrequency;
 
-    if (isCryingLevel && !this.isDetectingCry) {
+    if (isCryingLevel) {
+      this.consecutiveDetections++;
+    } else {
+      this.consecutiveDetections = 0;
+    }
+
+    // Require multiple consecutive detections to start cry detection
+    if (this.consecutiveDetections >= this.requiredConsecutiveDetections && !this.isDetectingCry) {
       // Start of potential cry
       this.isDetectingCry = true;
       this.detectionStartTime = Date.now();
@@ -72,10 +96,10 @@ export class CryDetectionEngine {
       // Continue collecting cry data
       this.analysisBuffer.push(audioData);
       
-      // Check if we have enough data for analysis (minimum 0.5 seconds)
+      // Check if we have enough data for analysis (minimum 0.7 seconds)
       const duration = (Date.now() - (this.detectionStartTime || 0)) / 1000;
-      if (duration >= 0.5 && this.analysisBuffer.length > 20) {
-        // Validate this is actually a cry using frequency analysis
+      if (duration >= 0.7 && this.analysisBuffer.length > 30) {
+        // Validate this is actually a cry using comprehensive analysis
         if (this.validateCryPattern(this.analysisBuffer, sampleRate)) {
           this.processCryDetection(sampleRate);
           return true;
@@ -84,7 +108,7 @@ export class CryDetectionEngine {
     } else if (!isCryingLevel && this.isDetectingCry) {
       // End of audio activity - check if it was a valid cry
       const duration = (Date.now() - (this.detectionStartTime || 0)) / 1000;
-      if (duration >= 0.3 && this.analysisBuffer.length > 10) {
+      if (duration >= 0.5 && this.analysisBuffer.length > 20) {
         if (this.validateCryPattern(this.analysisBuffer, sampleRate)) {
           this.processCryDetection(sampleRate);
           return true;
@@ -107,19 +131,35 @@ export class CryDetectionEngine {
       offset += chunk.length;
     }
 
-    // Check frequency characteristics typical of baby cries
+    // Enhanced validation with multiple criteria
     const f0 = this.estimateF0(combinedAudio, sampleRate);
     const spectralCentroid = this.calculateSpectralCentroid(combinedAudio, sampleRate);
+    const spectralRolloff = this.calculateSpectralRolloff(combinedAudio, sampleRate);
+    const zeroCrossingRate = this.calculateZeroCrossingRate(combinedAudio);
+    const energyVariation = this.calculateEnergyVariation(combinedAudio);
+    const duration = combinedAudio.length / sampleRate;
     
-    // Baby cry characteristics:
-    // - F0 typically 300-1200 Hz
-    // - Spectral centroid usually > 500 Hz
-    // - Duration typically 0.5-3 seconds for individual cry bursts
-    return (
-      f0 >= 300 && f0 <= 1200 &&
-      spectralCentroid > 500 &&
-      combinedAudio.length / sampleRate >= 0.3
-    );
+    // Baby cry characteristics (more comprehensive):
+    // - F0 typically 300-1200 Hz (fundamental frequency)
+    // - Spectral centroid usually > 500 Hz (brightness)
+    // - Spectral rolloff < 3000 Hz (energy concentration)
+    // - Moderate zero crossing rate (not too noisy, not too tonal)
+    // - High energy variation (crying has bursts and pauses)
+    // - Duration typically 0.5-4 seconds for individual cry bursts
+    
+    const validF0 = f0 >= 300 && f0 <= 1200;
+    const validSpectralCentroid = spectralCentroid > 500 && spectralCentroid < 2500;
+    const validSpectralRolloff = spectralRolloff > 800 && spectralRolloff < 3000;
+    const validZeroCrossing = zeroCrossingRate > 0.05 && zeroCrossingRate < 0.3;
+    const validEnergyVariation = energyVariation > 0.1;
+    const validDuration = duration >= 0.5 && duration <= 4.0;
+    
+    // Require most criteria to be met (at least 4 out of 6)
+    const criteriaCount = [validF0, validSpectralCentroid, validSpectralRolloff, 
+                          validZeroCrossing, validEnergyVariation, validDuration]
+                         .filter(Boolean).length;
+    
+    return criteriaCount >= 4;
   }
 
   private processCryDetection(sampleRate: number) {
@@ -162,6 +202,102 @@ export class CryDetectionEngine {
     this.isDetectingCry = false;
     this.detectionStartTime = null;
     this.analysisBuffer = [];
+    this.consecutiveDetections = 0;
+  }
+
+  private updateBackgroundNoise(currentRMS: number) {
+    // Keep a rolling buffer of noise levels
+    this.noiseBuffer.push(currentRMS);
+    if (this.noiseBuffer.length > 100) {
+      this.noiseBuffer.shift();
+    }
+    
+    // Update background noise level (use median to avoid outliers)
+    if (this.noiseBuffer.length >= 10) {
+      const sorted = [...this.noiseBuffer].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      this.backgroundNoiseLevel = median * 0.9 + this.backgroundNoiseLevel * 0.1;
+    }
+  }
+
+  private getDominantFrequency(signal: Float32Array, sampleRate: number): number {
+    const fftSize = Math.min(1024, signal.length);
+    const spectrum = this.simpleFFT(signal.slice(0, fftSize));
+    
+    let maxMagnitude = 0;
+    let dominantBin = 0;
+    
+    // Only check frequencies in the range of interest (200-1500 Hz)
+    const minBin = Math.floor((200 * fftSize) / sampleRate);
+    const maxBin = Math.floor((1500 * fftSize) / sampleRate);
+    
+    for (let i = minBin; i < Math.min(maxBin, spectrum.length / 2); i++) {
+      const magnitude = Math.sqrt(spectrum[i * 2] ** 2 + spectrum[i * 2 + 1] ** 2);
+      if (magnitude > maxMagnitude) {
+        maxMagnitude = magnitude;
+        dominantBin = i;
+      }
+    }
+    
+    return (dominantBin * sampleRate) / fftSize;
+  }
+
+  private calculateSpectralRolloff(signal: Float32Array, sampleRate: number): number {
+    const fftSize = Math.min(1024, signal.length);
+    const spectrum = this.simpleFFT(signal.slice(0, fftSize));
+    
+    let totalEnergy = 0;
+    const magnitudes: number[] = [];
+    
+    for (let i = 0; i < spectrum.length / 2; i++) {
+      const magnitude = Math.sqrt(spectrum[i * 2] ** 2 + spectrum[i * 2 + 1] ** 2);
+      magnitudes.push(magnitude);
+      totalEnergy += magnitude;
+    }
+    
+    const threshold = totalEnergy * 0.85; // 85% of total energy
+    let cumulativeEnergy = 0;
+    
+    for (let i = 0; i < magnitudes.length; i++) {
+      cumulativeEnergy += magnitudes[i];
+      if (cumulativeEnergy >= threshold) {
+        return (i * sampleRate) / fftSize;
+      }
+    }
+    
+    return (magnitudes.length * sampleRate) / fftSize;
+  }
+
+  private calculateZeroCrossingRate(signal: Float32Array): number {
+    let crossings = 0;
+    for (let i = 1; i < signal.length; i++) {
+      if ((signal[i] >= 0) !== (signal[i - 1] >= 0)) {
+        crossings++;
+      }
+    }
+    return crossings / (signal.length - 1);
+  }
+
+  private calculateEnergyVariation(signal: Float32Array): number {
+    const windowSize = Math.floor(signal.length / 10); // Divide into 10 windows
+    const energies: number[] = [];
+    
+    for (let i = 0; i < signal.length - windowSize; i += windowSize) {
+      let energy = 0;
+      for (let j = i; j < i + windowSize && j < signal.length; j++) {
+        energy += signal[j] * signal[j];
+      }
+      energies.push(energy / windowSize);
+    }
+    
+    if (energies.length < 2) return 0;
+    
+    // Calculate coefficient of variation (std dev / mean)
+    const mean = energies.reduce((sum, e) => sum + e, 0) / energies.length;
+    const variance = energies.reduce((sum, e) => sum + (e - mean) ** 2, 0) / energies.length;
+    const stdDev = Math.sqrt(variance);
+    
+    return mean > 0 ? stdDev / mean : 0;
   }
 
   private calculateRMS(signal: Float32Array): number {
@@ -230,6 +366,15 @@ export class CryDetectionEngine {
     }
     
     return result;
+  }
+
+  // Add method to get current detection state for UI feedback
+  public getDetectionState(): { isDetecting: boolean; confidence: number; backgroundNoise: number } {
+    return {
+      isDetecting: this.isDetectingCry,
+      confidence: Math.min(this.consecutiveDetections / this.requiredConsecutiveDetections, 1.0),
+      backgroundNoise: this.backgroundNoiseLevel
+    };
   }
 }
 

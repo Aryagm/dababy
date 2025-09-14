@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Sparkles, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import type { DetectionResult } from '@/lib/audioAnalysis';
+import { AdvancedMedicalDiagnosis, type MedicalCondition, type DiagnosisContext } from '@/lib/medicalDiagnosis';
 
 interface Message {
   id: string;
@@ -15,19 +17,21 @@ interface Message {
 interface AIChatbotProps {
   detectionResults: DetectionResult[];
   className?: string;
+  diagnosisContext?: DiagnosisContext;
 }
 
-export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) {
+export function AIChatbot({ detectionResults, className = '', diagnosisContext = {} }: AIChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hello! I'm your AI assistant for cry analysis. I can help explain detection results, provide insights about baby crying patterns, and answer questions about the analysis. How can I help you today?",
+      content: "Hello! I'm your AI assistant for comprehensive cry analysis. I can analyze medical conditions, explain detection results, and provide insights about baby crying patterns using advanced AI. How can I help you today?",
       sender: 'ai',
       timestamp: new Date()
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [medicalConditions, setMedicalConditions] = useState<MedicalCondition[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -38,80 +42,38 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
     scrollToBottom();
   }, [messages]);
 
-  const generateAIResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    // Get latest detection for context
+  useEffect(() => {
+    // Update medical conditions when new detection results come in
+    if (detectionResults.length > 0) {
+      const latestResult = detectionResults[detectionResults.length - 1];
+      const conditions = AdvancedMedicalDiagnosis.analyzeConditions(latestResult.features, diagnosisContext);
+      setMedicalConditions(conditions);
+    }
+  }, [detectionResults, diagnosisContext]);
+
+
+  const generateAIPrompt = (userMessage: string): string => {
     const latestDetection = detectionResults[detectionResults.length - 1];
+    const conditionsText = medicalConditions.length > 0 
+      ? medicalConditions.map(c => `${c.name} (${c.confidence.toFixed(2)} confidence): ${c.description}`).join('\n')
+      : 'No specific medical conditions detected';
     
-    // Pattern matching for different types of questions
-    if (lowerMessage.includes('what') && lowerMessage.includes('mean')) {
-      if (latestDetection) {
-        const { features, riskLevel } = latestDetection;
-        return `Based on your latest detection: The crying pattern shows a fundamental frequency of ${features.f0Mean.toFixed(0)}Hz (pitch), duration of ${features.duration.toFixed(1)} seconds, and ${riskLevel} risk level. Higher frequencies often indicate distress, while lower frequencies may suggest hunger or tiredness.`;
-      }
-      return "I can explain cry analysis results once you have some detections. The main factors I analyze include pitch (fundamental frequency), duration, intensity, and voice quality to assess the baby's needs.";
-    }
-    
-    if (lowerMessage.includes('risk') || lowerMessage.includes('alert')) {
-      if (latestDetection) {
-        const alertCount = latestDetection.alerts.length;
-        return `Your latest detection shows ${latestDetection.riskLevel} risk level with ${alertCount} alerts. ${latestDetection.riskLevel === 'critical' ? 'This suggests immediate attention may be needed.' : latestDetection.riskLevel === 'high' ? 'This indicates the baby may need attention soon.' : 'This appears to be normal crying behavior.'}`;
-      }
-      return "Risk levels help prioritize responses: 'Low' indicates normal crying, 'Medium' suggests monitoring, 'High' indicates attention needed, and 'Critical' suggests immediate response.";
-    }
-    
-    if (lowerMessage.includes('frequency') || lowerMessage.includes('pitch')) {
-      return "Fundamental frequency (pitch) is crucial in cry analysis. Higher pitches (>500Hz) often indicate pain or distress, moderate pitches (300-500Hz) suggest discomfort or general needs, and lower pitches (<300Hz) typically indicate hunger or tiredness.";
-    }
-    
-    if (lowerMessage.includes('duration') || lowerMessage.includes('long')) {
-      return "Cry duration patterns are important: Brief cries (<3s) often express immediate needs, moderate durations (3-10s) indicate general discomfort, and extended crying (>10s) may suggest persistent discomfort requiring attention.";
-    }
-    
-    if (lowerMessage.includes('hungry') || lowerMessage.includes('hunger')) {
-      return "Hunger cries typically have lower fundamental frequencies (250-400Hz), regular rhythmic patterns, and start softly then build in intensity. They often have a repetitive, demanding quality.";
-    }
-    
-    if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
-      return "Pain cries are usually high-pitched (>500Hz), sudden onset, intense, and piercing. They often have irregular patterns and may be accompanied by breathlessness or voice breaks.";
-    }
-    
-    if (lowerMessage.includes('tired') || lowerMessage.includes('sleep')) {
-      return "Tired or sleepy cries tend to be lower in pitch, have a whining quality, and may be accompanied by rubbing eyes or yawning. They often build gradually and have a fussy, irritable tone.";
-    }
-    
-    if (lowerMessage.includes('normal') || lowerMessage.includes('typical')) {
-      if (detectionResults.length > 0) {
-        const avgDuration = detectionResults.reduce((sum, r) => sum + r.features.duration, 0) / detectionResults.length;
-        const avgPitch = detectionResults.reduce((sum, r) => sum + r.features.f0Mean, 0) / detectionResults.length;
-        return `Based on your ${detectionResults.length} detections: Average duration is ${avgDuration.toFixed(1)}s, average pitch is ${avgPitch.toFixed(0)}Hz. Normal crying typically ranges 300-500Hz in pitch and 3-8 seconds in duration.`;
-      }
-      return "Normal baby crying typically has frequencies between 300-500Hz, durations of 3-8 seconds, and shows some variation in intensity. Consistent patterns outside these ranges may indicate specific needs.";
-    }
-    
-    if (lowerMessage.includes('help') || lowerMessage.includes('how')) {
-      return "I can help explain your cry analysis results, identify patterns in the data, and provide insights about what different crying characteristics might mean. You can ask about specific measurements like pitch, duration, or risk levels, or ask about general crying patterns.";
-    }
-    
-    if (lowerMessage.includes('thank') || lowerMessage.includes('thanks')) {
-      return "You're welcome! I'm here to help you understand your baby's crying patterns. Feel free to ask any questions about the analysis results or crying behavior in general.";
-    }
-    
-    // Default responses based on context
-    if (detectionResults.length === 0) {
-      return "I notice you haven't recorded any crying yet. Once you start recording, I can provide detailed analysis and insights about the crying patterns detected.";
-    }
-    
-    // Generic helpful response
-    const responses = [
-      "That's an interesting question! Could you be more specific about what aspect of cry analysis you'd like to know about?",
-      "I'd be happy to help! You can ask me about pitch frequencies, cry durations, risk levels, or what different crying patterns might indicate.",
-      "Based on your detection data, I can provide insights about crying patterns. What would you like to know more about?",
-      "Feel free to ask about any aspect of the cry analysis - I can explain the measurements, what they mean, or help interpret the results."
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
+    const contextText = Object.entries(diagnosisContext)
+      .filter(([_, value]) => value !== undefined)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ');
+
+    return `You are an expert pediatric AI assistant analyzing baby cry patterns. 
+
+Current Analysis Data:
+- Latest Detection: ${latestDetection ? `F0: ${latestDetection.features.f0Mean.toFixed(0)}Hz, Duration: ${latestDetection.features.duration.toFixed(1)}s, Risk: ${latestDetection.riskLevel}` : 'None'}
+- Medical Conditions Detected: ${conditionsText}
+- Context: ${contextText || 'None provided'}
+- Total Detections: ${detectionResults.length}
+
+User Question: ${userMessage}
+
+Provide a helpful, accurate response about the baby's cry analysis. Focus on medical insights, pattern interpretation, and actionable recommendations. Be concise but thorough.`;
   };
 
   const handleSendMessage = async () => {
@@ -125,21 +87,58 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentMessage = inputMessage;
     setInputMessage('');
     setIsTyping(true);
 
-    // Simulate AI thinking time
-    setTimeout(() => {
+    try {
+      const response = await axios.post('https://api.cerebras.ai/v1/chat/completions', {
+        model: 'llama-4-scout-17b-16e-instruct',
+        messages: [{
+          role: 'user',
+          content: generateAIPrompt(currentMessage)
+        }]
+      }, {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_CEREBRAS_API_KEY || 'csk-9nd6c92xj6pyjknep4mtc6pe8kfr2knxwjkyxevrm5p2d63h'}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Convert markdown to plain text
+      const rawContent = response.data.choices[0].message.content;
+      const plainTextContent = rawContent
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+        .replace(/\*(.*?)\*/g, '$1') // Remove italic
+        .replace(/#{1,6}\s/g, '') // Remove headers
+        .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+        .replace(/`([^`]+)`/g, '$1') // Remove inline code
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+        .replace(/^[-*+]\s/gm, '') // Remove bullet points
+        .replace(/^\d+\.\s/gm, '') // Remove numbered lists
+        .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
+        .trim();
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        content: generateAIResponse(inputMessage),
+        content: plainTextContent,
         sender: 'ai',
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      console.error('Cerebras API error:', error);
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: 'I apologize, but I\'m having trouble connecting to the AI service right now. Please try again later.',
+        sender: 'ai',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1500); // Random delay 1-2.5s
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -150,11 +149,29 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
   };
 
   const suggestedQuestions = [
+    "What medical conditions were detected?",
     "What does my latest detection mean?",
-    "How do I interpret the risk levels?",
-    "What's a normal crying pattern?",
-    "What do different pitches indicate?"
+    "Should I be concerned about these patterns?",
+    "What are the next steps I should take?"
   ];
+
+  const getMedicalAlertIcon = (severity: string) => {
+    switch (severity) {
+      case 'critical': return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      case 'high': return <AlertTriangle className="w-4 h-4 text-orange-500" />;
+      case 'medium': return <Clock className="w-4 h-4 text-yellow-500" />;
+      default: return <CheckCircle className="w-4 h-4 text-green-500" />;
+    }
+  };
+
+  const getMedicalAlertColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'border-red-200 bg-red-50';
+      case 'high': return 'border-orange-200 bg-orange-50';
+      case 'medium': return 'border-yellow-200 bg-yellow-50';
+      default: return 'border-green-200 bg-green-50';
+    }
+  };
 
   return (
     <Card className={`w-full ${className}`}>
@@ -169,6 +186,39 @@ export function AIChatbot({ detectionResults, className = '' }: AIChatbotProps) 
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0 space-y-6">
+        {/* Medical Conditions Alert Cards */}
+        {medicalConditions.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-700">Medical Analysis</h3>
+            <div className="grid gap-2 max-h-40 overflow-y-auto">
+              {medicalConditions.slice(0, 3).map((condition) => (
+                <div
+                  key={condition.id}
+                  className={`p-3 rounded-lg border ${getMedicalAlertColor(condition.severity)}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {getMedicalAlertIcon(condition.severity)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900">{condition.name}</p>
+                        <Badge variant="outline" className="text-xs">
+                          {(condition.confidence * 100).toFixed(0)}%
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">{condition.description}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Action: {condition.urgency === 'emergency' ? 'Seek immediate care' : 
+                                condition.urgency === 'urgent' ? 'Contact doctor soon' :
+                                condition.urgency === 'consult' ? 'Schedule consultation' : 'Monitor'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Chat Messages */}
         <div className="h-80 overflow-y-auto space-y-4 p-4 border rounded-lg bg-muted/10">
           {messages.map((message) => (

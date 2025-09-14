@@ -1,95 +1,55 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle, Info, TrendingUp, Clock } from 'lucide-react';
+import { CheckCircle, Info, TrendingUp, Clock } from 'lucide-react';
 import type { DetectionResult } from '@/lib/audioAnalysis';
 
 interface ResultsExplanationProps {
   latestResult: DetectionResult | null;
   totalDetections: number;
+  isCurrentlyDetecting?: boolean;
+  isRecording?: boolean;
 }
 
-export function ResultsExplanation({ latestResult, totalDetections }: ResultsExplanationProps) {
+export function ResultsExplanation({ latestResult, totalDetections, isCurrentlyDetecting, isRecording }: ResultsExplanationProps) {
   const getExplanation = () => {
-    if (!latestResult) {
+    if (!isRecording && !latestResult) {
       return {
-        title: "No Recent Analysis",
-        description: "Start recording to see AI-powered cry analysis and insights.",
+        title: "No Crying Detected",
+        description: "Start recording to monitor for baby crying.",
         icon: <Info className="w-5 h-5" />,
         variant: "secondary" as const,
         insights: []
       };
     }
 
-    const { features, riskLevel, alerts } = latestResult;
-    
-    // Heuristic-based analysis
-    const insights = [];
-    let title = "";
-    let description = "";
-    let icon = <CheckCircle className="w-5 h-5" />;
-    let variant: "success" | "warning" | "destructive" | "secondary" = "success";
-
-    // Analyze fundamental frequency (pitch)
-    if (features.f0Mean > 600) {
-      insights.push("High-pitched crying detected - may indicate distress or pain");
-    } else if (features.f0Mean < 300) {
-      insights.push("Low-pitched crying - often associated with hunger or tiredness");
-    } else {
-      insights.push("Normal pitch range detected - typical crying pattern");
+    if (isRecording && !isCurrentlyDetecting) {
+      return {
+        title: "Monitoring for Crying",
+        description: "Listening for baby cry patterns...",
+        icon: <Info className="w-5 h-5" />,
+        variant: "secondary" as const,
+        insights: []
+      };
     }
 
-    // Analyze cry duration
-    if (features.duration > 10) {
-      insights.push("Extended crying duration - monitor for signs of discomfort");
-    } else if (features.duration < 3) {
-      insights.push("Brief crying episode - likely expressing immediate need");
+    if (isCurrentlyDetecting) {
+      return {
+        title: "Crying Detected",
+        description: "Baby cry pattern currently being detected.",
+        icon: <CheckCircle className="w-5 h-5" />,
+        variant: "success" as const,
+        insights: []
+      };
     }
 
-    // Analyze harmonics and voice quality
-    if (features.hnr < 10) {
-      insights.push("Breathy or hoarse quality detected - may indicate vocal strain");
-    }
-
-    // Analyze intensity patterns
-    if (features.rms > 0.3) {
-      insights.push("High intensity crying - strong emotional or physical response");
-    }
-
-    // Risk level assessment
-    switch (riskLevel) {
-      case 'critical':
-        title = "Critical Alert Detected";
-        description = "Immediate attention recommended based on cry characteristics";
-        icon = <AlertTriangle className="w-5 h-5" />;
-        variant = "destructive";
-        break;
-      case 'high':
-        title = "High Priority Detection";
-        description = "Crying patterns suggest possible discomfort or urgent need";
-        icon = <AlertTriangle className="w-5 h-5" />;
-        variant = "warning";
-        break;
-      case 'medium':
-        title = "Moderate Crying Detected";
-        description = "Normal crying with some indicators worth monitoring";
-        icon = <TrendingUp className="w-5 h-5" />;
-        variant = "warning";
-        break;
-      default:
-        title = "Normal Crying Pattern";
-        description = "Typical crying characteristics within expected ranges";
-        icon = <CheckCircle className="w-5 h-5" />;
-        variant = "success";
-    }
-
-    // Add alert-specific insights
-    if (alerts.length > 0) {
-      alerts.forEach(alert => {
-        insights.push(`Alert: ${alert.message}`);
-      });
-    }
-
-    return { title, description, icon, variant, insights };
+    // Has previous results but not currently detecting
+    return {
+      title: "No Current Crying",
+      description: "Not currently detecting crying patterns.",
+      icon: <Info className="w-5 h-5" />,
+      variant: "secondary" as const,
+      insights: []
+    };
   };
 
   const explanation = getExplanation();
@@ -99,7 +59,7 @@ export function ResultsExplanation({ latestResult, totalDetections }: ResultsExp
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-3">
           {explanation.icon}
-          <span className="text-lg font-semibold">AI Analysis Summary</span>
+          <span className="text-lg font-semibold">Detection Status</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0 space-y-6">
@@ -110,7 +70,7 @@ export function ResultsExplanation({ latestResult, totalDetections }: ResultsExp
             <p className="text-sm text-muted-foreground leading-relaxed">{explanation.description}</p>
           </div>
           <Badge variant={explanation.variant} className="px-3 py-1 text-xs font-medium">
-            {latestResult?.riskLevel?.toUpperCase() || 'NONE'}
+            {isCurrentlyDetecting ? 'DETECTING' : 'NONE'}
           </Badge>
         </div>
 

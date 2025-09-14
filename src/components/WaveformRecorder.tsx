@@ -12,12 +12,16 @@ interface WaveformRecorderProps {
 }
 
 type RecordingPhase = 'idle' | 'recording' | 'cry-detected' | 'analyzing' | 'complete';
+type DetectionState = { isDetecting: boolean; confidence: number; backgroundNoise: number };
 
 export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetected }) => {
   const [phase, setPhase] = useState<RecordingPhase>('idle');
   const [waveformData, setWaveformData] = useState<number[]>(Array(50).fill(0));
   const [currentCry, setCurrentCry] = useState<CryInstance | null>(null);
   const [detectedCries, setDetectedCries] = useState<CryInstance[]>([]);
+  const [detectionState, setDetectionState] = useState<DetectionState>({ isDetecting: false, confidence: 0, backgroundNoise: 0 });
+  const [realtimeCryAlert, setRealtimeCryAlert] = useState(false);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -109,27 +113,96 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
     
     analyserRef.current.getByteFrequencyData(dataArray);
     
-    // Process real-time audio for cry detection
-    if (phase === 'recording' && cryDetectionEngineRef.current) {
-      const timeData = new Uint8Array(bufferLength);
-      analyserRef.current.getByteTimeDomainData(timeData);
-      
-      // Convert to Float32Array for processing
-      const floatData = new Float32Array(timeData.length);
-      for (let i = 0; i < timeData.length; i++) {
-        floatData[i] = (timeData[i] - 128) / 128.0;
-      }
-      
-      // Check for cry detection
-      const cryDetected = cryDetectionEngineRef.current.processSample(floatData, 44100);
-      if (cryDetected) {
-        // Cry detection engine will call handleCryDetected via callback
-      }
-    }
-    
     // Process data into 50 bars for visualization
     const bars = 50;
     const usableRange = Math.floor(bufferLength * 0.8);
+    
+    // Simple cry detection based on right-side waveform activity
+    if (phase === 'recording') {
+      // Check if 10 seconds have passed since recording started
+      const currentTime = Date.now();
+      const timeSinceStart = recordingStartTime ? (currentTime - recordingStartTime) / 1000 : 0;
+      const detectionEnabled = timeSinceStart >= 10;
+      // Calculate frequency mapping for waveform bars
+      // FFT size: 1024, Sample rate: 44100 Hz
+      // Frequency per bin: 44100 / 1024 = ~43 Hz per bin
+      // 50 bars use 80% of 512 frequency bins
+      // Right side (bars 25-50) = higher frequencies (roughly 540-8600 Hz)
+      
+      // Check activity in right-side bars (higher frequencies)
+      const rightSideStartBar = 25; // Middle point
+      let rightSideActivity = 0;
+      let rightSideCount = 0;
+      
+      // Calculate right-side activity from current waveform data
+      for (let i = rightSideStartBar; i < bars; i++) {
+        const barIndex = i;
+        const startFreqBin = Math.floor((barIndex * usableRange) / bars);
+        const endFreqBin = Math.floor(((barIndex + 1) * usableRange) / bars);
+        
+        let barSum = 0;
+        let barCount = 0;
+        for (let j = startFreqBin; j < endFreqBin && j < dataArray.length; j++) {
+          barSum += dataArray[j];
+          barCount++;
+        }
+        
+        if (barCount > 0) {
+          const barAverage = barSum / barCount;
+          rightSideActivity += barAverage;
+          rightSideCount++;
+        }
+      }
+      
+      // Simple crying detection rule (only after 10 seconds)
+      const avgRightSideActivity = rightSideCount > 0 ? rightSideActivity / rightSideCount : 0;
+      const activityThreshold = 30; // Adjust based on testing
+      const isCrying = detectionEnabled && avgRightSideActivity > activityThreshold;
+      
+      // Update detection state
+      const confidence = detectionEnabled ? Math.min(avgRightSideActivity / 100, 1.0) : 0;
+      setDetectionState({
+        isDetecting: isCrying,
+        confidence: confidence,
+        backgroundNoise: avgRightSideActivity / 255
+      });
+      
+      // Show real-time cry alert (only after 10 seconds)
+      setRealtimeCryAlert(detectionEnabled && isCrying && confidence > 0.4);
+      
+      // Trigger cry detection if threshold is met (only after 10 seconds)
+      if (detectionEnabled && isCrying && confidence > 0.6) {
+        // Create mock audio features for the callback
+        const mockFeatures = {
+          f0: [],
+          f0Mean: 400 + (confidence * 400), // Scale with confidence
+          f0Std: 50,
+          hnr: 15,
+          jitter: 0.02,
+          shimmer: 0.05,
+          rms: confidence * 0.3,
+          spectralCentroid: 800 + (confidence * 1200),
+          spectralFlatness: 0.2,
+          voicedSegmentLengths: [],
+          pauseLengths: [],
+          burstLengths: [],
+          repetitionRate: 0.5,
+          nasalEnergyRatio: 0.1,
+          lowMidHarmonics: 0.3,
+          duration: 1.0,
+          sampleRate: 44100
+        };
+        
+        // Throttle detection to avoid spam
+        const now = Date.now();
+        if (!detectionState.isDetecting || (now - (window as any).lastCryDetection || 0) > 3000) {
+          (window as any).lastCryDetection = now;
+          handleCryDetected(mockFeatures);
+        }
+      }
+    }
+    
+    // Continue with waveform visualization
     const samplesPerBar = Math.floor(usableRange / bars);
     const waveData: number[] = [];
     
@@ -174,11 +247,22 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
           icon: <Mic className="w-5 h-5" />
         };
       case 'recording':
+        const recordingDescription = realtimeCryAlert 
+          ? `Potential cry detected! Confidence: ${Math.round(detectionState.confidence * 100)}%`
+          : detectionState.isDetecting 
+          ? 'Analyzing potential cry pattern...'
+          : 'Monitoring audio and filtering for baby cry patterns';
+        
         return {
-          title: 'Listening for Crying',
-          description: 'Monitoring audio and filtering for baby cry patterns',
-          badge: { text: 'Recording', variant: 'info' as const },
-          icon: <Search className="w-5 h-5 animate-pulse" />
+          title: realtimeCryAlert ? '🚨 Potential Cry Detected!' : 'Listening for Crying',
+          description: recordingDescription,
+          badge: { 
+            text: realtimeCryAlert ? 'Cry Alert!' : 'Recording', 
+            variant: realtimeCryAlert ? 'warning' as const : 'info' as const 
+          },
+          icon: realtimeCryAlert 
+            ? <AlertTriangle className="w-5 h-5 animate-bounce text-yellow-500" />
+            : <Search className="w-5 h-5 animate-pulse" />
         };
       case 'cry-detected':
         return {
@@ -263,6 +347,7 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
       mediaRecorderRef.current.start(100);
       setPhase('recording');
       setCurrentCry(null);
+      setRecordingStartTime(Date.now());
       
       // Start waveform animation
       animationRef.current = requestAnimationFrame(updateWaveform);
@@ -295,6 +380,9 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
     setTimeout(() => {
       setPhase('idle');
       setWaveformData(Array(50).fill(0));
+      setDetectionState({ isDetecting: false, confidence: 0, backgroundNoise: 0 });
+      setRealtimeCryAlert(false);
+      setRecordingStartTime(null);
     }, 3000);
   };
 
@@ -340,8 +428,14 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
             {phaseDisplay.description}
           </p>
           
-          {/* Enhanced Waveform Visualization */}
-          <div className="h-24 flex items-end justify-center gap-1 bg-muted/30 rounded-lg p-4">
+          {/* Enhanced Waveform Visualization with Real-time Feedback */}
+          <div className={`h-24 flex items-end justify-center gap-1 rounded-lg p-4 transition-all duration-300 ${
+            realtimeCryAlert 
+              ? 'bg-yellow-100 border-2 border-yellow-400 shadow-lg' 
+              : detectionState.isDetecting
+              ? 'bg-orange-50 border border-orange-200'
+              : 'bg-muted/30'
+          }`}>
             {waveformData.map((value, index) => (
               <WaveformBar
                 key={index}
@@ -350,7 +444,11 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
                 height="3px"
                 isActive={phase !== 'idle'}
                 className={`transition-all duration-100 ${
-                  phase === 'cry-detected' 
+                  realtimeCryAlert
+                    ? 'bg-yellow-500 animate-pulse'
+                    : detectionState.isDetecting
+                    ? 'bg-orange-400'
+                    : phase === 'cry-detected' 
                     ? 'bg-yellow-500' 
                     : phase === 'analyzing' 
                     ? 'bg-blue-500' 
@@ -361,6 +459,45 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
               />
             ))}
           </div>
+          
+          {/* Real-time Detection Status */}
+          {phase === 'recording' && (
+            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>Detection Status:</span>
+                <span className={`font-medium ${
+                  realtimeCryAlert ? 'text-yellow-600' : 
+                  detectionState.isDetecting ? 'text-orange-600' : 'text-green-600'
+                }`}>
+                  {realtimeCryAlert ? 'Cry Alert!' : 
+                   detectionState.isDetecting ? 'Analyzing...' : 'Monitoring'}
+                </span>
+              </div>
+              
+              {detectionState.confidence > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span>Confidence:</span>
+                    <span>{Math.round(detectionState.confidence * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        detectionState.confidence > 0.7 ? 'bg-yellow-500' :
+                        detectionState.confidence > 0.4 ? 'bg-orange-400' : 'bg-blue-400'
+                      }`}
+                      style={{ width: `${detectionState.confidence * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Background Noise:</span>
+                <span>{(detectionState.backgroundNoise * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+          )}
           
           {/* Current Cry Info */}
           {currentCry && phase === 'complete' && (

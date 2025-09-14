@@ -11,15 +11,20 @@ interface ContinuousMonitorProps {
   onDetectionResult?: (result: DetectionResult) => void;
   isMonitoring: boolean;
   onMonitoringChange: (monitoring: boolean) => void;
+  onDetectionStateChange?: (isDetecting: boolean) => void;
 }
 
 export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({ 
   onDetectionResult, 
   isMonitoring, 
-  onMonitoringChange 
+  onMonitoringChange,
+  onDetectionStateChange
 }) => {
   const [waveformData, setWaveformData] = useState<number[]>(Array(60).fill(0));
   const [currentLevel, setCurrentLevel] = useState<number>(0);
+  const [isCurrentlyDetecting, setIsCurrentlyDetecting] = useState<boolean>(false);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
+  const lastDetectionRef = useRef<number>(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -70,7 +75,9 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
   }, [onDetectionResult]);
 
   const updateWaveform = useCallback(() => {
+    console.log('updateWaveform called', { isMonitoring, recordingStartTime });
     if (!analyserRef.current) {
+      console.log('No analyser available');
       return;
     }
     
@@ -113,11 +120,50 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
     
     setWaveformData(waveData);
     
+    // Simple frequency-based cry detection - check for high frequency activity
+    const rightSideStartBar = Math.floor(bars * 0.5); // Start from middle (higher frequencies)
+    let maxRightSideActivity = 0;
+    
+    // Find the maximum activity in the right half (higher frequencies)
+    for (let i = rightSideStartBar; i < bars; i++) {
+      const activity = waveData[i] * 100; // Scale to 0-100
+      if (activity > maxRightSideActivity) {
+        maxRightSideActivity = activity;
+      }
+    }
+    
+    // Simple threshold: if any high frequency bar shows activity above 10, detect crying
+    const frequencyThreshold = 10;
+    const currentlyDetecting = maxRightSideActivity > frequencyThreshold;
+    
+    console.log('Simple Detection:', {
+      maxRightSideActivity,
+      frequencyThreshold,
+      currentlyDetecting,
+      rightSideStartBar,
+      totalBars: bars
+    });
+    
+    // Update detection state
+    const now = Date.now();
+    if (currentlyDetecting !== isCurrentlyDetecting || now - lastDetectionRef.current > 1000) {
+      setIsCurrentlyDetecting(currentlyDetecting);
+      onDetectionStateChange?.(currentlyDetecting);
+      lastDetectionRef.current = now;
+      console.log('Detection state changed to:', currentlyDetecting);
+    }
+    
     // Continue animation regardless of monitoring state for visual feedback
     animationRef.current = requestAnimationFrame(updateWaveform);
-  }, []);
+  }, [isMonitoring, recordingStartTime, isCurrentlyDetecting, onDetectionStateChange]);
+
+  // Add effect to track prop changes
+  useEffect(() => {
+    console.log('ContinuousMonitor props changed:', { isMonitoring, recordingStartTime });
+  }, [isMonitoring, recordingStartTime]);
 
   const startMonitoring = async () => {
+    console.log('startMonitoring called');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -127,6 +173,7 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
           sampleRate: 44100
         }
       });
+      console.log('Got media stream');
       
       streamRef.current = stream;
       
@@ -176,6 +223,8 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
       
       // Start recording and analysis cycle
       mediaRecorderRef.current.start();
+      setRecordingStartTime(Date.now());
+      console.log('Setting monitoring to true, recordingStartTime:', Date.now());
       onMonitoringChange(true);
       
       // Set up periodic analysis (every 3 seconds)
@@ -216,6 +265,9 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
     onMonitoringChange(false);
     setWaveformData(Array(40).fill(0));
     setCurrentLevel(0);
+    setIsCurrentlyDetecting(false);
+    setRecordingStartTime(null);
+    onDetectionStateChange?.(false);
     
     // Stop the animation when monitoring stops
     if (animationRef.current) {

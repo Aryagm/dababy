@@ -1,4 +1,4 @@
-import { AlertDashboard } from '@/components/AlertDashboard'
+import { RiskAssessmentTable } from '@/components/RiskAssessmentTable'
 import { FeatureDisplay } from '@/components/FeatureDisplay'
 import { CryAnalytics } from '@/components/CryAnalytics'
 import { Button } from '@/components/ui/button'
@@ -64,7 +64,7 @@ export function ResultsSection({ detectionResults, isMonitoring, latestFeatures 
       {/* Content Area */}
       <div className="min-h-[500px]">
         {resultsView === 'dashboard' && (
-          <AlertDashboard 
+          <RiskAssessmentTable 
             detectionResults={detectionResults}
             isMonitoring={isMonitoring}
           />

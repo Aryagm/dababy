@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ContinuousMonitor } from '@/components/ContinuousMonitor'
 import type { DetectionResult } from '@/lib/audioAnalysis'
 
@@ -6,12 +5,14 @@ interface RecordingSectionProps {
   onDetectionResult: (result: DetectionResult) => void;
   isMonitoring: boolean;
   onMonitoringChange: (monitoring: boolean) => void;
+  onDetectionStateChange?: (isDetecting: boolean) => void;
 }
 
 export function RecordingSection({ 
   onDetectionResult, 
   isMonitoring, 
-  onMonitoringChange 
+  onMonitoringChange,
+  onDetectionStateChange
 }: RecordingSectionProps) {
   return (
     <div className="w-full">
@@ -21,6 +22,7 @@ export function RecordingSection({
           onDetectionResult={onDetectionResult}
           isMonitoring={isMonitoring}
           onMonitoringChange={onMonitoringChange}
+          onDetectionStateChange={onDetectionStateChange}
         />
       </div>
     </div>
