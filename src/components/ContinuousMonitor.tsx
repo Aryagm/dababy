@@ -36,14 +36,20 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
   const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const processAudioChunk = useCallback(async (audioBlob: Blob) => {
+    let tempAudioContext: AudioContext | null = null;
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      tempAudioContext = new AudioContext();
+      const audioBuffer = await tempAudioContext.decodeAudioData(arrayBuffer);
       
       // Only analyze if there's sufficient audio data (at least 0.5 seconds)
       if (audioBuffer.duration >= 0.5) {
-        const result = await audioAnalyzer.current.analyzeAudio(audioBuffer);
+        // Get current detection count from localStorage
+        const savedState = typeof window !== 'undefined' ? 
+          JSON.parse(localStorage.getItem('dababy_app_state') || '{}') : {};
+        const detectionCount = (savedState.detectionResults?.length || 0) + 1;
+        
+        const result = await audioAnalyzer.current.analyzeAudio(audioBuffer, detectionCount);
         onDetectionResult?.(result);
         
         // Store significant detection results to localStorage
@@ -67,10 +73,17 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
         // Update baseline for weak cry detection
         audioAnalyzer.current.updateBaseline(result.features.rms);
       }
-      
-      audioContext.close();
     } catch (error) {
       console.error('Error processing audio chunk:', error);
+    } finally {
+      // Safely close the temporary AudioContext
+      if (tempAudioContext && tempAudioContext.state !== 'closed') {
+        try {
+          await tempAudioContext.close();
+        } catch (closeError) {
+          console.warn('Error closing temporary AudioContext:', closeError);
+        }
+      }
     }
   }, [onDetectionResult]);
 
@@ -256,10 +269,17 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
     
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
+    // Safely close AudioContext
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.close();
+      } catch (error) {
+        console.warn('Error closing AudioContext:', error);
+      }
+      audioContextRef.current = null;
     }
     
     onMonitoringChange(false);
@@ -288,8 +308,12 @@ export const ContinuousMonitor: React.FC<ContinuousMonitorProps> = ({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        try {
+          audioContextRef.current.close();
+        } catch (error) {
+          console.warn('Error closing AudioContext on cleanup:', error);
+        }
       }
     };
   }, []);

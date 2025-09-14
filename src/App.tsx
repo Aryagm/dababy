@@ -1,17 +1,21 @@
 import './App.css'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RecordingSection } from '@/components/RecordingSection'
 import { ResultsSection } from '@/components/ResultsSection'
 import { AIChatbot } from '@/components/AIChatbot'
 import { ResultsExplanation } from '@/components/ResultsExplanation'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Trash2, Download, Upload } from 'lucide-react'
 import type { DetectionResult } from '@/lib/audioAnalysis'
 import type { DiagnosisContext } from '@/lib/medicalDiagnosis'
+import { AppStorage } from '@/lib/appStorage'
 
 function App() {
   const [detectionResults, setDetectionResults] = useState<DetectionResult[]>([]);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCurrentlyDetecting, setIsCurrentlyDetecting] = useState(false);
+  const [storageInfo, setStorageInfo] = useState(AppStorage.getStorageInfo());
   const [activeSection, setActiveSection] = useState<'recording' | 'results' | 'ai'>('recording');
   const [diagnosisContext, setDiagnosisContext] = useState<DiagnosisContext>({
     babyAge: undefined,
@@ -23,8 +27,77 @@ function App() {
     constipation: false
   });
 
+  // Load saved state on component mount
+  useEffect(() => {
+    const savedState = AppStorage.loadAppState();
+    setDetectionResults(savedState.detectionResults);
+    setDiagnosisContext(savedState.diagnosisContext);
+    setActiveSection(savedState.activeSection);
+    setStorageInfo(AppStorage.getStorageInfo());
+  }, []);
+
+  // Update storage info when detection results change
+  useEffect(() => {
+    setStorageInfo(AppStorage.getStorageInfo());
+  }, [detectionResults, diagnosisContext]);
+
   const handleDetectionResult = (result: DetectionResult) => {
-    setDetectionResults(prev => [...prev, result].slice(-100)); // Keep last 100 results
+    const updatedResults = AppStorage.addDetectionResult(result);
+    setDetectionResults(updatedResults);
+  };
+
+  const handleClearAllData = () => {
+    if (window.confirm('Are you sure you want to clear all stored data? This action cannot be undone.')) {
+      AppStorage.clearAllData();
+      setDetectionResults([]);
+      setDiagnosisContext({
+        babyAge: undefined,
+        isJaundiced: false,
+        postFeed: false,
+        hasFever: false,
+        gestationalAge: undefined,
+        feedingDifficulty: false,
+        constipation: false
+      });
+      setStorageInfo(AppStorage.getStorageInfo());
+      // Reload the page to reset chat messages
+      window.location.reload();
+    }
+  };
+
+  const handleExportData = () => {
+    const data = AppStorage.exportAppState();
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crai-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const jsonData = e.target?.result as string;
+        if (AppStorage.importAppState(jsonData)) {
+          alert('Data imported successfully! The page will reload to apply changes.');
+          window.location.reload();
+        } else {
+          alert('Failed to import data. Please check the file format.');
+        }
+      } catch (error) {
+        alert('Failed to import data. Invalid file format.');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // Reset input
   };
 
   const latestFeatures = detectionResults.length > 0 
@@ -41,6 +114,59 @@ function App() {
             <p className="text-2xl text-muted-foreground font-medium">
               AI-powered infant cry analysis
             </p>
+            
+            {/* Storage Info */}
+            <div className="flex justify-center items-center gap-4 pt-4">
+              <Badge variant="outline" className="text-xs">
+                {detectionResults.length} recordings stored
+              </Badge>
+              <Badge variant={storageInfo.percentage > 80 ? 'destructive' : 'secondary'} className="text-xs">
+                {storageInfo.percentage.toFixed(1)}% storage used
+              </Badge>
+              
+              {/* Data Management Buttons */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportData}
+                  className="text-xs"
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  Export
+                </Button>
+                
+                <label className="cursor-pointer">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    asChild
+                  >
+                    <span>
+                      <Upload className="w-3 h-3 mr-1" />
+                      Import
+                    </span>
+                  </Button>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportData}
+                    className="hidden"
+                  />
+                </label>
+                
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleClearAllData}
+                  className="text-xs"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Clear All
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -52,21 +178,30 @@ function App() {
           <div className="flex bg-card/80 backdrop-blur-sm border rounded-xl p-1.5 shadow-lg">
             <Button
               variant={activeSection === 'recording' ? 'default' : 'ghost'}
-              onClick={() => setActiveSection('recording')}
+              onClick={() => {
+                setActiveSection('recording');
+                AppStorage.saveActiveSection('recording');
+              }}
               className="px-10 py-4 text-lg font-medium rounded-lg"
             >
               Record
             </Button>
             <Button
               variant={activeSection === 'results' ? 'default' : 'ghost'}
-              onClick={() => setActiveSection('results')}
+              onClick={() => {
+                setActiveSection('results');
+                AppStorage.saveActiveSection('results');
+              }}
               className="px-10 py-4 text-lg font-medium rounded-lg"
             >
               Results
             </Button>
             <Button
               variant={activeSection === 'ai' ? 'default' : 'ghost'}
-              onClick={() => setActiveSection('ai')}
+              onClick={() => {
+                setActiveSection('ai');
+                AppStorage.saveActiveSection('ai');
+              }}
               className="px-10 py-4 text-lg font-medium rounded-lg"
             >
               AI Chat
@@ -116,10 +251,14 @@ function App() {
                     <input
                       type="number"
                       value={diagnosisContext.babyAge || ''}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        babyAge: e.target.value ? parseInt(e.target.value) : undefined
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          babyAge: e.target.value ? parseInt(e.target.value) : undefined
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="w-full px-3 py-2 border rounded-lg text-sm"
                       placeholder="e.g., 8"
                     />
@@ -129,10 +268,14 @@ function App() {
                     <input
                       type="number"
                       value={diagnosisContext.gestationalAge || ''}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        gestationalAge: e.target.value ? parseInt(e.target.value) : undefined
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          gestationalAge: e.target.value ? parseInt(e.target.value) : undefined
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="w-full px-3 py-2 border rounded-lg text-sm"
                       placeholder="e.g., 37"
                     />
@@ -142,10 +285,14 @@ function App() {
                       type="checkbox"
                       id="jaundiced"
                       checked={diagnosisContext.isJaundiced}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        isJaundiced: e.target.checked
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          isJaundiced: e.target.checked
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="rounded"
                     />
                     <label htmlFor="jaundiced" className="text-sm font-medium">Jaundiced</label>
@@ -155,10 +302,14 @@ function App() {
                       type="checkbox"
                       id="postFeed"
                       checked={diagnosisContext.postFeed}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        postFeed: e.target.checked
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          postFeed: e.target.checked
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="rounded"
                     />
                     <label htmlFor="postFeed" className="text-sm font-medium">Post-Feed</label>
@@ -168,10 +319,14 @@ function App() {
                       type="checkbox"
                       id="fever"
                       checked={diagnosisContext.hasFever}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        hasFever: e.target.checked
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          hasFever: e.target.checked
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="rounded"
                     />
                     <label htmlFor="fever" className="text-sm font-medium">Has Fever</label>
@@ -181,10 +336,14 @@ function App() {
                       type="checkbox"
                       id="feedingDifficulty"
                       checked={diagnosisContext.feedingDifficulty}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        feedingDifficulty: e.target.checked
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          feedingDifficulty: e.target.checked
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="rounded"
                     />
                     <label htmlFor="feedingDifficulty" className="text-sm font-medium">Feeding Issues</label>
@@ -194,10 +353,14 @@ function App() {
                       type="checkbox"
                       id="constipation"
                       checked={diagnosisContext.constipation}
-                      onChange={(e) => setDiagnosisContext(prev => ({
-                        ...prev,
-                        constipation: e.target.checked
-                      }))}
+                      onChange={(e) => {
+                        const newContext = {
+                          ...diagnosisContext,
+                          constipation: e.target.checked
+                        };
+                        setDiagnosisContext(newContext);
+                        AppStorage.saveDiagnosisContext(newContext);
+                      }}
                       className="rounded"
                     />
                     <label htmlFor="constipation" className="text-sm font-medium">Constipation</label>

@@ -42,9 +42,14 @@ export const WaveformRecorder: React.FC<WaveformRecorderProps> = ({ onCryDetecte
       setPhase('analyzing');
       
       try {
+        // Get current detection count from localStorage
+        const savedState = typeof window !== 'undefined' ? 
+          JSON.parse(localStorage.getItem('dababy_app_state') || '{}') : {};
+        const detectionCount = (savedState.detectionResults?.length || 0) + 1;
+        
         // Create a mock audio buffer for analysis (in real implementation, use actual audio)
         const mockAudioBuffer = createMockAudioBuffer(features);
-        const result = await audioAnalyzerRef.current.analyzeAudio(mockAudioBuffer);
+        const result = await audioAnalyzerRef.current.analyzeAudio(mockAudioBuffer, detectionCount);
         
         // Generate diagnosis
         const diagnosis = CryDiagnosisEngine.generateDiagnosis(result);

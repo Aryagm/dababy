@@ -43,10 +43,10 @@ export class AudioAnalyzer {
   }
 
   // Main analysis function
-  async analyzeAudio(audioBuffer: AudioBuffer): Promise<DetectionResult> {
+  async analyzeAudio(audioBuffer: AudioBuffer, detectionCount: number = 1): Promise<DetectionResult> {
     const features = await this.extractFeatures(audioBuffer);
     const alerts = this.detectPatterns(features);
-    const riskLevel = this.calculateRiskLevel(alerts);
+    const riskLevel = this.calculateRiskLevel(alerts, detectionCount);
 
     return {
       timestamp: new Date(),
@@ -241,11 +241,53 @@ export class AudioAnalyzer {
     return alerts;
   }
 
-  private calculateRiskLevel(alerts: Alert[]): 'low' | 'medium' | 'high' | 'critical' {
-    if (alerts.some(a => a.severity === 'critical')) return 'critical';
-    if (alerts.some(a => a.severity === 'high')) return 'high';
-    if (alerts.some(a => a.severity === 'medium')) return 'medium';
-    return 'low';
+  private calculateRiskLevel(alerts: Alert[], detectionCount: number = 1): 'low' | 'medium' | 'high' | 'critical' {
+    if (alerts.length === 0) return 'low';
+    
+    // Count alerts by severity
+    const criticalCount = alerts.filter(a => a.severity === 'critical').length;
+    const highCount = alerts.filter(a => a.severity === 'high').length;
+    const mediumCount = alerts.filter(a => a.severity === 'medium').length;
+    
+    // Apply detection count-based risk reduction
+    // First few detections should be treated with lower confidence
+    let riskReduction = 0;
+    if (detectionCount <= 2) {
+      riskReduction = 2; // Reduce by 2 levels for first 2 detections
+    } else if (detectionCount <= 5) {
+      riskReduction = 1; // Reduce by 1 level for detections 3-5
+    } else if (detectionCount <= 10) {
+      riskReduction = 0; // No reduction for detections 6-10
+    }
+    // After 10 detections, patterns are more reliable
+    
+    // Determine base risk level (more conservative thresholds)
+    let baseRisk: 'low' | 'medium' | 'high' | 'critical' = 'low';
+    
+    if (criticalCount >= 2) {
+      baseRisk = 'critical';
+    } else if (criticalCount >= 1 && (highCount >= 1 || mediumCount >= 2)) {
+      baseRisk = 'high';
+    } else if (criticalCount >= 1) {
+      baseRisk = 'medium'; // Single critical alert becomes medium
+    } else if (highCount >= 2) {
+      baseRisk = 'high';
+    } else if (highCount >= 1 && mediumCount >= 1) {
+      baseRisk = 'medium';
+    } else if (highCount >= 1) {
+      baseRisk = 'low'; // Single high alert becomes low
+    } else if (mediumCount >= 2) {
+      baseRisk = 'medium';
+    } else if (mediumCount >= 1) {
+      baseRisk = 'low'; // Single medium alert becomes low
+    }
+    
+    // Apply risk reduction based on detection count
+    const riskLevels: ('low' | 'medium' | 'high' | 'critical')[] = ['low', 'medium', 'high', 'critical'];
+    const currentIndex = riskLevels.indexOf(baseRisk);
+    const adjustedIndex = Math.max(0, currentIndex - riskReduction);
+    
+    return riskLevels[adjustedIndex];
   }
 
   // Helper methods for audio analysis

@@ -3,16 +3,11 @@ import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, Sparkles, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Send, Bot, User, Sparkles, AlertTriangle, CheckCircle, Clock, MapPin } from 'lucide-react';
 import type { DetectionResult } from '@/lib/audioAnalysis';
 import { AdvancedMedicalDiagnosis, type MedicalCondition, type DiagnosisContext } from '@/lib/medicalDiagnosis';
+import { AppStorage, type Message } from '@/lib/appStorage';
 
-interface Message {
-  id: string;
-  content: string;
-  sender: 'user' | 'ai';
-  timestamp: Date;
-}
 
 interface AIChatbotProps {
   detectionResults: DetectionResult[];
@@ -21,22 +16,31 @@ interface AIChatbotProps {
 }
 
 export function AIChatbot({ detectionResults, className = '', diagnosisContext = {} }: AIChatbotProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: "Hello! I'm your AI assistant for comprehensive cry analysis. I can analyze medical conditions, explain detection results, and provide insights about baby crying patterns using advanced AI. How can I help you today?",
-      sender: 'ai',
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [medicalConditions, setMedicalConditions] = useState<MedicalCondition[]>([]);
+  const [babyLocation, setBabyLocation] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Load saved messages and location on component mount
+  useEffect(() => {
+    const savedState = AppStorage.loadAppState();
+    // Ensure timestamps are Date objects
+    const messagesWithDates = savedState.chatMessages.map(msg => ({
+      ...msg,
+      timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp || Date.now())
+    }));
+    setMessages(messagesWithDates);
+    
+    // Load saved baby location
+    const savedLocation = localStorage.getItem('dababy_location') || '';
+    setBabyLocation(savedLocation);
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -62,6 +66,8 @@ export function AIChatbot({ detectionResults, className = '', diagnosisContext =
       .filter(([_, value]) => value !== undefined)
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ');
+    
+    const locationText = babyLocation ? `Baby Location: ${babyLocation}` : 'Location: Not specified';
 
     return `You are an expert pediatric AI assistant analyzing baby cry patterns. 
 
@@ -69,6 +75,7 @@ Current Analysis Data:
 - Latest Detection: ${latestDetection ? `F0: ${latestDetection.features.f0Mean.toFixed(0)}Hz, Duration: ${latestDetection.features.duration.toFixed(1)}s, Risk: ${latestDetection.riskLevel}` : 'None'}
 - Medical Conditions Detected: ${conditionsText}
 - Context: ${contextText || 'None provided'}
+- ${locationText}
 - Total Detections: ${detectionResults.length}
 
 User Question: ${userMessage}
@@ -86,7 +93,8 @@ Provide a helpful, accurate response about the baby's cry analysis. Focus on med
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const updatedMessages = AppStorage.addChatMessage(userMessage);
+    setMessages(updatedMessages);
     const currentMessage = inputMessage;
     setInputMessage('');
     setIsTyping(true);
@@ -126,7 +134,8 @@ Provide a helpful, accurate response about the baby's cry analysis. Focus on med
         timestamp: new Date()
       };
 
-      setMessages(prev => [...prev, aiResponse]);
+      const updatedMessages = AppStorage.addChatMessage(aiResponse);
+      setMessages(updatedMessages);
     } catch (error) {
       console.error('Cerebras API error:', error);
       const errorResponse: Message = {
@@ -135,7 +144,8 @@ Provide a helpful, accurate response about the baby's cry analysis. Focus on med
         sender: 'ai',
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, errorResponse]);
+      const updatedMessages = AppStorage.addChatMessage(errorResponse);
+      setMessages(updatedMessages);
     } finally {
       setIsTyping(false);
     }
@@ -146,6 +156,11 @@ Provide a helpful, accurate response about the baby's cry analysis. Focus on med
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleLocationChange = (location: string) => {
+    setBabyLocation(location);
+    localStorage.setItem('dababy_location', location);
   };
 
   const suggestedQuestions = [
@@ -186,6 +201,39 @@ Provide a helpful, accurate response about the baby's cry analysis. Focus on med
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0 space-y-6">
+        {/* Baby Location Section */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            Baby Location
+          </h3>
+          <div className="flex gap-2">
+            <select
+              value={babyLocation}
+              onChange={(e) => handleLocationChange(e.target.value)}
+              className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="">Select location...</option>
+              <option value="nursery">Nursery</option>
+              <option value="bedroom">Bedroom</option>
+              <option value="living_room">Living Room</option>
+              <option value="kitchen">Kitchen</option>
+              <option value="car">Car</option>
+              <option value="stroller">Stroller</option>
+              <option value="crib">Crib</option>
+              <option value="high_chair">High Chair</option>
+              <option value="playpen">Playpen</option>
+              <option value="outdoors">Outdoors</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          {babyLocation && (
+            <p className="text-xs text-gray-600">
+              Current location: <span className="font-medium">{babyLocation.replace('_', ' ')}</span>
+            </p>
+          )}
+        </div>
+
         {/* Medical Conditions Alert Cards */}
         {medicalConditions.length > 0 && (
           <div className="space-y-3">
@@ -246,7 +294,9 @@ Provide a helpful, accurate response about the baby's cry analysis. Focus on med
               }`}>
                 <p className="text-sm leading-relaxed">{message.content}</p>
                 <p className="text-xs opacity-70 mt-2">
-                  {message.timestamp.toLocaleTimeString()}
+                  {message.timestamp instanceof Date 
+                    ? message.timestamp.toLocaleTimeString() 
+                    : new Date(message.timestamp).toLocaleTimeString()}
                 </p>
               </div>
             </div>
